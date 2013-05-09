@@ -47,7 +47,7 @@ namespace ColtPlugin
         /// </summary> 
         public String Name
 		{
-			get { return this.pluginName; }
+			get { return pluginName; }
 		}
 
         /// <summary>
@@ -55,7 +55,7 @@ namespace ColtPlugin
         /// </summary>
         public String Guid
 		{
-			get { return this.pluginGuid; }
+			get { return pluginGuid; }
 		}
 
         /// <summary>
@@ -63,7 +63,7 @@ namespace ColtPlugin
         /// </summary> 
         public String Author
 		{
-			get { return this.pluginAuth; }
+			get { return pluginAuth; }
 		}
 
         /// <summary>
@@ -71,7 +71,7 @@ namespace ColtPlugin
         /// </summary> 
         public String Description
 		{
-			get { return this.pluginDesc; }
+			get { return pluginDesc; }
 		}
 
         /// <summary>
@@ -79,7 +79,7 @@ namespace ColtPlugin
         /// </summary> 
         public String Help
 		{
-			get { return this.pluginHelp; }
+			get { return pluginHelp; }
 		}
 
         /// <summary>
@@ -88,7 +88,7 @@ namespace ColtPlugin
         [Browsable(false)]
         public Object Settings
         {
-            get { return this.settingObject; }
+            get { return settingObject; }
         }
 		
 		#endregion
@@ -100,10 +100,10 @@ namespace ColtPlugin
 		/// </summary>
 		public void Initialize()
 		{
-            this.InitBasics();
-            this.LoadSettings();
-            this.InitLocalization();
-            this.AddEventHandlers();
+            InitBasics();
+            LoadSettings();
+            InitLocalization();
+            AddEventHandlers();
         }
 		
 		/// <summary>
@@ -111,7 +111,7 @@ namespace ColtPlugin
 		/// </summary>
 		public void Dispose()
 		{
-            this.SaveSettings();
+            SaveSettings();
 		}
 		
 		/// <summary>
@@ -127,8 +127,8 @@ namespace ColtPlugin
                     {
                         IProject project = PluginBase.CurrentProject;
                         Boolean as3projectIsOpen = (project != null) && (project.Language == "as3");
-                        if (this.menuItem != null) this.menuItem.Enabled = as3projectIsOpen;
-                        if (this.toolbarButton != null) this.toolbarButton.Enabled = as3projectIsOpen;
+                        if (menuItem != null) menuItem.Enabled = as3projectIsOpen;
+                        if (toolbarButton != null) toolbarButton.Enabled = as3projectIsOpen;
                         // deactivate if project is closed
                         active &= as3projectIsOpen;
                         if (watcher != null) watcher.EnableRaisingEvents &= as3projectIsOpen;
@@ -141,12 +141,12 @@ namespace ColtPlugin
                     else if (cmd == "ProjectManager.Menu")
                     {
                         Object menu = (e as DataEvent).Data;
-                        this.CreateMenuItem(menu as ToolStripMenuItem);
+                        CreateMenuItem(menu as ToolStripMenuItem);
                     }
                     else if (cmd == "ProjectManager.ToolBar")
                     {
                         Object toolStrip = (e as DataEvent).Data;
-                        this.CreateToolbarButton(toolStrip as ToolStrip);
+                        CreateToolbarButton(toolStrip as ToolStrip);
                     }
                 break;
             }
@@ -163,7 +163,7 @@ namespace ColtPlugin
         {
             String dataPath = Path.Combine(PathHelper.DataDir, "ColtPlugin");
             if (!Directory.Exists(dataPath)) Directory.CreateDirectory(dataPath);
-            this.settingFilename = Path.Combine(dataPath, "Settings.fdb");
+            settingFilename = Path.Combine(dataPath, "Settings.fdb");
         }
 
         /// <summary>
@@ -185,8 +185,8 @@ namespace ColtPlugin
                     LocaleHelper.Initialize(LocaleVersion.en_US);
                     break;
             }
-            this.pluginDesc = LocaleHelper.GetString("Info.Description");
-            this.buttonText = LocaleHelper.GetString("Info.ButtonText");
+            pluginDesc = LocaleHelper.GetString("Info.Description");
+            buttonText = LocaleHelper.GetString("Info.ButtonText");
         }
 
         /// <summary>
@@ -207,18 +207,18 @@ namespace ColtPlugin
 
         private void CreateMenuItem(ToolStripMenuItem projectMenu)
         {
-            this.menuItem = new ToolStripMenuItem(buttonText, GetImage("colt.png"), new EventHandler(this.OnClick), null);
-            projectMenu.DropDownItems.Add(this.menuItem);
+            menuItem = new ToolStripMenuItem(buttonText, GetImage("colt.png"), new EventHandler(OnClick), null);
+            projectMenu.DropDownItems.Add(menuItem);
         }
 
         private void CreateToolbarButton(ToolStrip toolStrip)
         {
-            this.toolbarButton = new ToolStripButton();
-            this.toolbarButton.Image = GetImage("colt.png");
-            this.toolbarButton.Text = buttonText;
-            this.toolbarButton.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            this.toolbarButton.Click += new EventHandler(this.OnClick);
-            toolStrip.Items.Add(this.toolbarButton);
+            toolbarButton = new ToolStripButton();
+            toolbarButton.Image = GetImage("colt.png");
+            toolbarButton.Text = buttonText;
+            toolbarButton.DisplayStyle = ToolStripItemDisplayStyle.Image;
+            toolbarButton.Click += new EventHandler(OnClick);
+            toolStrip.Items.Add(toolbarButton);
         }
 
         /// <summary>
@@ -246,12 +246,12 @@ namespace ColtPlugin
         /// </summary>
         public void LoadSettings()
         {
-            this.settingObject = new Settings();
-            if (!File.Exists(this.settingFilename)) this.SaveSettings();
+            settingObject = new Settings();
+            if (!File.Exists(settingFilename)) SaveSettings();
             else
             {
-                Object obj = ObjectSerializer.Deserialize(this.settingFilename, this.settingObject);
-                this.settingObject = (Settings)obj;
+                Object obj = ObjectSerializer.Deserialize(settingFilename, settingObject);
+                settingObject = (Settings)obj;
             }
         }
 
@@ -260,7 +260,7 @@ namespace ColtPlugin
         /// </summary>
         public void SaveSettings()
         {
-            ObjectSerializer.Serialize(this.settingFilename, this.settingObject);
+            ObjectSerializer.Serialize(settingFilename, settingObject);
         }
 
 		#endregion
@@ -269,7 +269,7 @@ namespace ColtPlugin
         {
             if (Path.GetFileName(e.FullPath).Contains("compile_errors.log"))
             {
-/* This hangs FD :( now if someone could fix this...
+/* This hangs FD :( now if someone could fix ..
  *
                 StreamReader stream = File.OpenText(e.FullPath);
                 String errors = stream.ReadToEnd(); stream.Close();
@@ -295,7 +295,7 @@ namespace ColtPlugin
             AS3Project project = (AS3Project)PluginBase.CurrentProject;
 
             String configCopy = "";
-            if (this.settingObject.FullConfig)
+            if (settingObject.FullConfig)
             {
                 // Construct flex config file name (see AS3ProjectBuilder, line 140)
                 String projectName = project.Name.Replace(" ", "");
@@ -323,7 +323,7 @@ namespace ColtPlugin
             
 
             // Create COLT subfolder if does not exist yet
-            String coltFolderPath = project.GetAbsolutePath(this.settingObject.WorkingFolder);
+            String coltFolderPath = project.GetAbsolutePath(settingObject.WorkingFolder);
             if (!Directory.Exists(coltFolderPath)) Directory.CreateDirectory(coltFolderPath);
 
             // While at that, start listening for colt/compile_errors.log changes
@@ -337,7 +337,7 @@ namespace ColtPlugin
             watcher.EnableRaisingEvents = true;
 
             // Create COLT project with random name (if we'd update same file - are there file locks? how to reopen in colt?)
-            String coltFileName = project.GetAbsolutePath(Path.Combine(this.settingObject.WorkingFolder, System.Guid.NewGuid() + ".colt"));
+            String coltFileName = project.GetAbsolutePath(Path.Combine(settingObject.WorkingFolder, System.Guid.NewGuid() + ".colt"));
             StreamWriter stream = File.CreateText(coltFileName);
 
 
@@ -364,7 +364,7 @@ namespace ColtPlugin
 
             stream.WriteLine("liveMethods=annotated");
 
-            if (this.settingObject.FullConfig)
+            if (settingObject.FullConfig)
             {
                 stream.WriteLine("compilerOptions=-load-config+\\=\"" + EscapeForCOLT(project.GetAbsolutePath(configCopy)) + "\"");
             }
