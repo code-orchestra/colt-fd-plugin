@@ -9,38 +9,29 @@ namespace ColtPlugin
     [Serializable]
     public class Settings
     {
-        private Int32 sampleNumber = 69;
-        private String sampleText = "This is a sample plugin.";
-        private Keys sampleShortcut = Keys.Control | Keys.F1;
+        private String workingFolder = "colt";
+        private Boolean fullConfig = false;
         
         /// <summary> 
-        /// Get and sets the sampleText
+        /// Get and sets colt folder
         /// </summary>
-        [Description("A sample string setting."), DefaultValue("This is a sample plugin.")]
-        public String SampleText 
+        [DisplayName("COLT Working Folder")]
+        [Description("Path to COLT working folder."), DefaultValue("colt")]
+        public String WorkingFolder 
         {
-            get { return this.sampleText; }
-            set { this.sampleText = value; }
+            get { return this.workingFolder; }
+            set { this.workingFolder = value; }
         }
 
         /// <summary> 
-        /// Get and sets the sampleNumber
+        /// Get and sets full config flag
         /// </summary>
-        [Description("A sample integer setting."), DefaultValue(69)]
-        public Int32 SampleNumber 
+        [DisplayName("Load Full FD Configuration")]
+        [Description("Attempt to load full FD configuration in COLT. FD project must be built at least once first."), DefaultValue(false)]
+        public Boolean FullConfig 
         {
-            get { return this.sampleNumber; }
-            set { this.sampleNumber = value; }
-        }
-
-        /// <summary> 
-        /// Get and sets the sampleShortcut
-        /// </summary>
-        [Description("A sample shortcut setting."), DefaultValue(Keys.Control | Keys.F1)]
-        public Keys SampleShortcut
-        {
-            get { return this.sampleShortcut; }
-            set { this.sampleShortcut = value; }
+            get { return this.fullConfig; }
+            set { this.fullConfig = value; }
         }
 
     }

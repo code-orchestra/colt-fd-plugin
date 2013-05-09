@@ -29,6 +29,8 @@ namespace ColtPlugin
         private ToolStripMenuItem menuItem;
         private ToolStripButton toolbarButton;
         private Boolean active = false;
+        private FileSystemWatcher watcher;
+        private String lastErrors = "";
 
 	    #region Required Properties
 
@@ -129,6 +131,7 @@ namespace ColtPlugin
                         if (this.toolbarButton != null) this.toolbarButton.Enabled = as3projectIsOpen;
                         // deactivate if project is closed
                         active &= as3projectIsOpen;
+                        if (watcher != null) watcher.EnableRaisingEvents &= as3projectIsOpen;
                     }
                     else if (cmd == "ASCompletion.ClassPath")
                     {
@@ -191,8 +194,11 @@ namespace ColtPlugin
         /// </summary> 
         public void AddEventHandlers()
         {
-            // Set events you want to listen (combine as flags)
             EventManager.AddEventHandler(this, EventType.Command);
+
+            watcher = new FileSystemWatcher();
+            watcher.NotifyFilter = NotifyFilters.LastWrite;
+            watcher.Changed += new FileSystemEventHandler(OnFileChange);
         }
 
         #endregion
@@ -233,7 +239,7 @@ namespace ColtPlugin
 
         #endregion
 
-        #region Plugin settings stuff (reserved for future use :)
+        #region Plugin settings stuff
 
         /// <summary>
         /// Loads the plugin settings
@@ -259,6 +265,26 @@ namespace ColtPlugin
 
 		#endregion
 
+        private void OnFileChange(Object sender, FileSystemEventArgs e)
+        {
+            if (Path.GetFileName(e.FullPath).Contains("compile_errors.log"))
+            {
+/* This hangs FD :( now if someone could fix this...
+ *
+                StreamReader stream = File.OpenText(e.FullPath);
+                String errors = stream.ReadToEnd(); stream.Close();
+
+                String message = errors;
+                if ((lastErrors.Length > 0) && (errors.IndexOf(lastErrors) == 0))
+                {
+                    message = errors.Substring(lastErrors.Length);
+                }
+                TraceManager.AddAsync(message, -3);
+
+                lastErrors = errors;
+ */
+            }
+        }
 
         /// <summary>
         /// Opens the project in COLT
@@ -267,14 +293,51 @@ namespace ColtPlugin
         {
             // our options: parse project.ProjectPath (xml file) or use api
             AS3Project project = (AS3Project)PluginBase.CurrentProject;
+
+            String configCopy = "";
+            if (this.settingObject.FullConfig)
+            {
+                // Construct flex config file name (see AS3ProjectBuilder, line 140)
+                String projectName = project.Name.Replace(" ", "");
+                String configFile = Path.Combine("obj", projectName + "Config.xml");
+
+                if (!File.Exists(project.GetAbsolutePath(configFile)))
+                {
+                    TraceManager.AddAsync("Required file (" + projectName + "Config.xml) does not exist, project must be built first...", -1);
+
+                    EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.BuildProject", null));
+
+                    return;
+                }
+
+                // Create config copy with <file-specs>...</file-specs> commented out
+                StreamReader src = File.OpenText(project.GetAbsolutePath(configFile));
+                String config = src.ReadToEnd();
+                src.Close();
+
+                configCopy = Path.Combine("obj", projectName + "ConfigCopy.xml");
+                StreamWriter dst = File.CreateText(project.GetAbsolutePath(configCopy));
+                dst.Write(config.Replace("<file-specs", "<!-- file-specs").Replace("/file-specs>", "/file-specs -->"));
+                dst.Close();
+            }
             
 
             // Create COLT subfolder if does not exist yet
-            String coltFolderPath = project.GetAbsolutePath("colt");
+            String coltFolderPath = project.GetAbsolutePath(this.settingObject.WorkingFolder);
             if (!Directory.Exists(coltFolderPath)) Directory.CreateDirectory(coltFolderPath);
 
+            // While at that, start listening for colt/compile_errors.log changes
+            String pathToLog = Path.Combine(coltFolderPath, "compile_errors.log");
+            if (File.Exists(pathToLog))
+            {
+                StreamReader errorsFile = File.OpenText(pathToLog);
+                lastErrors = errorsFile.ReadToEnd(); errorsFile.Close();
+            }
+            watcher.Path = coltFolderPath;
+            watcher.EnableRaisingEvents = true;
+
             // Create COLT project with random name (if we'd update same file - are there file locks? how to reopen in colt?)
-            String coltFileName = project.GetAbsolutePath("colt/" + System.Guid.NewGuid() + ".colt");
+            String coltFileName = project.GetAbsolutePath(Path.Combine(this.settingObject.WorkingFolder, System.Guid.NewGuid() + ".colt"));
             StreamWriter stream = File.CreateText(coltFileName);
 
 
@@ -301,8 +364,10 @@ namespace ColtPlugin
 
             stream.WriteLine("liveMethods=annotated");
 
-            // todo: add fd generated config here, -load-config+=...
-            //stream.WriteLine("compilerOptions=-swf-version\=13");
+            if (this.settingObject.FullConfig)
+            {
+                stream.WriteLine("compilerOptions=-load-config+\\=\"" + EscapeForCOLT(project.GetAbsolutePath(configCopy)) + "\"");
+            }
             
             stream.WriteLine("target=SWF"); // use project.MovieOptions.Platform switch ??
 
@@ -323,10 +388,15 @@ namespace ColtPlugin
 
             // Open it with default app (COLT)
             Process.Start(coltFileName);
-            /* seems to be same shit ??
-            ProcessStartInfo psi = new ProcessStartInfo(coltFileName);
-            psi.UseShellExecute = true;
-            Process.Start(psi); */
+
+            // Remove older *.colt files
+            foreach (String oldFile in Directory.GetFiles(coltFolderPath, "*.colt"))
+            {
+                if (!coltFileName.Contains(Path.GetFileName(oldFile)))
+                {
+                    File.Delete(oldFile);
+                }
+            }
         }
 
         private String EscapeForCOLT(String path)

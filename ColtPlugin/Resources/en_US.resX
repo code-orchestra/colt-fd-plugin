@@ -121,6 +121,6 @@
     <value>Open in COLT</value>
   </data>
   <data name="Info.Description" xml:space="preserve">
-    <value>COLT FlashDevelop Plugin</value>
+    <value>COLT Plugin for FlashDevelop.</value>
   </data>
 </root>
