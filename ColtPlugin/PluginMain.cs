@@ -293,8 +293,9 @@ namespace ColtPlugin
 
             String message = File.ReadAllText(pathToLog);
 
-            // hack: COLT copies sources to "incremental" folder, so let's try to guess-patch correct path
-            String sourcePath = PluginBase.CurrentProject.SourcePaths[0];
+            // COLT copies sources to "incremental" folder, so let's try to find correct path and patch the output
+            String incremental = "colt\\incremental";
+            String[] sources = PluginBase.CurrentProject.SourcePaths;
 
             // [09.05.2013 17:26:54] Philippe Elsass: make sure you send the log line by line to the Output
             String[] messageLines = message.Split(new Char[] {'\r', '\n'});
@@ -302,7 +303,27 @@ namespace ColtPlugin
             {
                 // [08.05.2013 18:04:15] Philippe Elsass: you can also specify '-3' as 2nd parameter to the traces (error level)
                 // [08.05.2013 18:05:02] Philippe Elsass: so it will appear in red in the output and have an error icon in the results panel
-                TraceManager.AddAsync(line.Replace("colt\\incremental", sourcePath), -3);
+                if (line.Contains(incremental))
+                {
+                    // carefully take the file name out
+                    String file = line.Substring(0, line.IndexOf("): col"));
+                    file = file.Substring(0, file.LastIndexOf("("));
+                    file = file.Substring(file.IndexOf(incremental) + incremental.Length + 1);
+
+                    // look for it in all source folders
+                    for (int i = 0; i < sources.Length; i++)
+                    {
+                        if (File.Exists(PluginBase.CurrentProject.GetAbsolutePath(Path.Combine(sources[i], file))))
+                        {
+                            TraceManager.AddAsync(line.Replace(incremental, sources[i]), -3); break;
+                        }
+                    }
+                }
+                else
+                {
+                    // send as is
+                    TraceManager.AddAsync(line, -3);
+                }
             }
         }
 
