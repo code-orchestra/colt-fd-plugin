@@ -298,13 +298,16 @@ namespace ColtPlugin
                 message = errors.Substring(lastErrors.Length);
             }
 
+            // hack: COLT copies sources to "incremental" folder, so let's try to guess-patch correct path
+            String sourcePath = PluginBase.CurrentProject.SourcePaths[0];
+
             // [09.05.2013 17:26:54] Philippe Elsass: make sure you send the log line by line to the Output
             String[] messageLines = message.Split(new Char[] {'\r', '\n'});
             foreach (String line in messageLines) if (line.Length > 0)
             {
                 // [08.05.2013 18:04:15] Philippe Elsass: you can also specify '-3' as 2nd parameter to the traces (error level)
                 // [08.05.2013 18:05:02] Philippe Elsass: so it will appear in red in the output and have an error icon in the results panel
-                TraceManager.AddAsync(line, -3);
+                TraceManager.AddAsync(line.Replace("colt\\incremental", sourcePath), -3);
             }
 
             lastErrors = errors;
