@@ -31,6 +31,8 @@ namespace ColtPlugin
         private Boolean active = false;
         private FileSystemWatcher watcher;
         private String lastErrors = "";
+        private String pathToLog;
+        private System.Timers.Timer timer;
 
 	    #region Required Properties
 
@@ -129,9 +131,10 @@ namespace ColtPlugin
                         Boolean as3projectIsOpen = (project != null) && (project.Language == "as3");
                         if (menuItem != null) menuItem.Enabled = as3projectIsOpen;
                         if (toolbarButton != null) toolbarButton.Enabled = as3projectIsOpen;
-                        // deactivate if project is closed
-                        active &= as3projectIsOpen;
-                        if (watcher != null) watcher.EnableRaisingEvents &= as3projectIsOpen;
+                        // deactivate
+                        active = false;
+                        if (watcher != null) watcher.EnableRaisingEvents = false;
+                        if (timer != null) { timer.Stop(); timer = null; }
                     }
                     else if (cmd == "ASCompletion.ClassPath")
                     {
@@ -267,23 +270,44 @@ namespace ColtPlugin
 
         private void OnFileChange(Object sender, FileSystemEventArgs e)
         {
-            if (Path.GetFileName(e.FullPath).Contains("compile_errors.log"))
+            if (e.FullPath.EndsWith("compile_errors.log"))
             {
-/* This hangs FD :( now if someone could fix ..
- *
-                StreamReader stream = File.OpenText(e.FullPath);
-                String errors = stream.ReadToEnd(); stream.Close();
-
-                String message = errors;
-                if ((lastErrors.Length > 0) && (errors.IndexOf(lastErrors) == 0))
+                // [09.05.2013 16:47:46] Philippe Elsass: the problem is that the event may happen before you are allowed to read the file
+                // [09.05.2013 16:48:03] Philippe Elsass: that's why the FlashErrorWatcher uses a Timer to wait a bit before reading the file
+                if (timer == null)
                 {
-                    message = errors.Substring(lastErrors.Length);
+                    timer = new System.Timers.Timer();
+                    timer.Interval = 200;
+                    timer.Elapsed += OnTimerElapsed;
+                    timer.Enabled = true;
+                    timer.Start();
                 }
-                TraceManager.AddAsync(message, -3);
-
-                lastErrors = errors;
- */
             }
+        }
+
+        private void OnTimerElapsed(object sender, EventArgs e)
+        {
+            timer.Stop();
+            timer = null;
+
+            String errors = File.ReadAllText(pathToLog);
+
+            String message = errors;
+            if ((lastErrors.Length > 0) && errors.StartsWith(lastErrors))
+            {
+                message = errors.Substring(lastErrors.Length);
+            }
+
+            // [09.05.2013 17:26:54] Philippe Elsass: make sure you send the log line by line to the Output
+            String[] messageLines = message.Split(new Char[] {'\r', '\n'});
+            foreach (String line in messageLines) if (line.Length > 0)
+            {
+                // [08.05.2013 18:04:15] Philippe Elsass: you can also specify '-3' as 2nd parameter to the traces (error level)
+                // [08.05.2013 18:05:02] Philippe Elsass: so it will appear in red in the output and have an error icon in the results panel
+                TraceManager.AddAsync(line, -3);
+            }
+
+            lastErrors = errors;
         }
 
         /// <summary>
@@ -311,14 +335,11 @@ namespace ColtPlugin
                 }
 
                 // Create config copy with <file-specs>...</file-specs> commented out
-                StreamReader src = File.OpenText(project.GetAbsolutePath(configFile));
-                String config = src.ReadToEnd();
-                src.Close();
-
                 configCopy = Path.Combine("obj", projectName + "ConfigCopy.xml");
-                StreamWriter dst = File.CreateText(project.GetAbsolutePath(configCopy));
-                dst.Write(config.Replace("<file-specs", "<!-- file-specs").Replace("/file-specs>", "/file-specs -->"));
-                dst.Close();
+                File.WriteAllText(project.GetAbsolutePath(configCopy),
+                    File.ReadAllText(project.GetAbsolutePath(configFile))
+                        .Replace("<file-specs", "<!-- file-specs")
+                        .Replace("/file-specs>", "/file-specs -->"));
             }
             
 
@@ -327,12 +348,8 @@ namespace ColtPlugin
             if (!Directory.Exists(coltFolderPath)) Directory.CreateDirectory(coltFolderPath);
 
             // While at that, start listening for colt/compile_errors.log changes
-            String pathToLog = Path.Combine(coltFolderPath, "compile_errors.log");
-            if (File.Exists(pathToLog))
-            {
-                StreamReader errorsFile = File.OpenText(pathToLog);
-                lastErrors = errorsFile.ReadToEnd(); errorsFile.Close();
-            }
+            pathToLog = Path.Combine(coltFolderPath, "compile_errors.log");
+            if (File.Exists(pathToLog)) lastErrors = File.ReadAllText(pathToLog);
             watcher.Path = coltFolderPath;
             watcher.EnableRaisingEvents = true;
 
