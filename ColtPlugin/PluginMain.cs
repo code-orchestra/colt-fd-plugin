@@ -30,7 +30,6 @@ namespace ColtPlugin
         private ToolStripButton toolbarButton;
         private Boolean active = false;
         private FileSystemWatcher watcher;
-        private String lastErrors = "";
         private String pathToLog;
         private System.Timers.Timer timer;
 
@@ -268,6 +267,8 @@ namespace ColtPlugin
 
 		#endregion
 
+        #region Logging errors
+
         private void OnFileChange(Object sender, FileSystemEventArgs e)
         {
             if (e.FullPath.EndsWith("compile_errors.log"))
@@ -290,13 +291,7 @@ namespace ColtPlugin
             timer.Stop();
             timer = null;
 
-            String errors = File.ReadAllText(pathToLog);
-
-            String message = errors;
-            if ((lastErrors.Length > 0) && errors.StartsWith(lastErrors))
-            {
-                message = errors.Substring(lastErrors.Length);
-            }
+            String message = File.ReadAllText(pathToLog);
 
             // hack: COLT copies sources to "incremental" folder, so let's try to guess-patch correct path
             String sourcePath = PluginBase.CurrentProject.SourcePaths[0];
@@ -309,9 +304,9 @@ namespace ColtPlugin
                 // [08.05.2013 18:05:02] Philippe Elsass: so it will appear in red in the output and have an error icon in the results panel
                 TraceManager.AddAsync(line.Replace("colt\\incremental", sourcePath), -3);
             }
-
-            lastErrors = errors;
         }
+
+        #endregion
 
         /// <summary>
         /// Opens the project in COLT
@@ -352,7 +347,6 @@ namespace ColtPlugin
 
             // While at that, start listening for colt/compile_errors.log changes
             pathToLog = Path.Combine(coltFolderPath, "compile_errors.log");
-            if (File.Exists(pathToLog)) lastErrors = File.ReadAllText(pathToLog);
             watcher.Path = coltFolderPath;
             watcher.EnableRaisingEvents = true;
 
@@ -425,5 +419,4 @@ namespace ColtPlugin
             return path.Replace(@"\", @"\\").Replace(":", @"\:").Replace("=", @"\=");
         }
 	}
-	
 }
