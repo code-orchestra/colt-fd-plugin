@@ -150,7 +150,11 @@ namespace ColtPlugin
                         Object toolStrip = (e as DataEvent).Data;
                         CreateToolbarButton(toolStrip as ToolStrip);
                     }
-                break;
+                    break;
+                
+                case EventType.FileSave:
+                    if (active) ClearErrors();
+                    break;
             }
 		}
 
@@ -196,7 +200,7 @@ namespace ColtPlugin
         /// </summary> 
         public void AddEventHandlers()
         {
-            EventManager.AddEventHandler(this, EventType.Command);
+            EventManager.AddEventHandler(this, EventType.Command | EventType.FileSave);
 
             watcher = new FileSystemWatcher();
             watcher.NotifyFilter = NotifyFilters.LastWrite;
@@ -273,11 +277,10 @@ namespace ColtPlugin
         {
             if (e.FullPath.EndsWith("compile_errors.log"))
             {
-                // [09.05.2013 16:47:46] Philippe Elsass: the problem is that the event may happen before you are allowed to read the file
-                // [09.05.2013 16:48:03] Philippe Elsass: that's why the FlashErrorWatcher uses a Timer to wait a bit before reading the file
                 if (timer == null)
                 {
                     timer = new System.Timers.Timer();
+                    timer.SynchronizingObject = (Form)PluginBase.MainForm; // thread safe
                     timer.Interval = 200;
                     timer.Elapsed += OnTimerElapsed;
                     timer.Enabled = true;
@@ -291,6 +294,8 @@ namespace ColtPlugin
             timer.Stop();
             timer = null;
 
+            ClearErrors();
+
             String message = File.ReadAllText(pathToLog);
 
             // COLT copies sources to "incremental" folder, so let's try to find correct path and patch the output
@@ -299,6 +304,7 @@ namespace ColtPlugin
 
             // [09.05.2013 17:26:54] Philippe Elsass: make sure you send the log line by line to the Output
             String[] messageLines = message.Split(new Char[] {'\r', '\n'});
+            bool hasErrors = false;
             foreach (String line in messageLines) if (line.Length > 0)
             {
                 // [08.05.2013 18:04:15] Philippe Elsass: you can also specify '-3' as 2nd parameter to the traces (error level)
@@ -315,16 +321,31 @@ namespace ColtPlugin
                     {
                         if (File.Exists(PluginBase.CurrentProject.GetAbsolutePath(Path.Combine(sources[i], file))))
                         {
-                            TraceManager.AddAsync(line.Replace(incremental, sources[i]), -3); break;
+                            TraceManager.Add(line.Replace(incremental, sources[i]), -3);
+                            hasErrors = true;
+                            break;
                         }
                     }
                 }
                 else
                 {
                     // send as is
-                    TraceManager.AddAsync(line, -3);
+                    TraceManager.Add(line, -3);
                 }
             }
+
+            if (hasErrors) ShowErrors();
+        }
+
+        private void ClearErrors()
+        {
+            EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ResultsPanel.ClearResults", null));
+        }
+
+        private void ShowErrors()
+        {
+            // should be an option: if the panel was hidden it captures keyboard focus
+            //EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ResultsPanel.ShowResults", null));
         }
 
         #endregion
@@ -346,7 +367,7 @@ namespace ColtPlugin
 
                 if (!File.Exists(project.GetAbsolutePath(configFile)))
                 {
-                    TraceManager.AddAsync("Required file (" + projectName + "Config.xml) does not exist, project must be built first...", -1);
+                    TraceManager.Add("Required file (" + projectName + "Config.xml) does not exist, project must be built first...", -1);
 
                     EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.BuildProject", null));
 
