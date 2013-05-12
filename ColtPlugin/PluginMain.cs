@@ -153,7 +153,7 @@ namespace ColtPlugin
                     break;
                 
                 case EventType.FileSave:
-                    ClearErrors();
+                    if (active) ClearErrors();
                     break;
             }
 		}
