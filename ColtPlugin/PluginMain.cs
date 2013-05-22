@@ -13,6 +13,9 @@ using PluginCore.Managers;
 using PluginCore.Helpers;
 using PluginCore;
 using ProjectManager.Projects.AS3;
+using ASCompletion.Context;
+using System.Text.RegularExpressions;
+using ASCompletion.Model;
 
 namespace ColtPlugin
 {
@@ -32,6 +35,7 @@ namespace ColtPlugin
         private FileSystemWatcher watcher;
         private String pathToLog;
         private System.Timers.Timer timer;
+        private Keys MakeItLiveKeys = Keys.Control | Keys.Shift | Keys.L;
 
 	    #region Required Properties
 
@@ -155,6 +159,24 @@ namespace ColtPlugin
                 case EventType.FileSave:
                     if (active) ClearErrors();
                     break;
+
+                case EventType.Keys: // shortcut pressed
+                    KeyEvent ke = (KeyEvent)e;
+                    if (ke.Value == MakeItLiveKeys)
+                    {
+                        ke.Handled = true;
+                        MakeItLive();
+                    }
+                    break;
+
+                case EventType.Shortcut: // shortcut changed
+                    DataEvent de = (DataEvent)e;
+                    if (de.Action == "ColtPlugin.MakeItLive")
+                    {
+                        MakeItLiveKeys = (Keys)de.Data;
+                    }
+                    break;
+
             }
 		}
 
@@ -200,11 +222,13 @@ namespace ColtPlugin
         /// </summary> 
         public void AddEventHandlers()
         {
-            EventManager.AddEventHandler(this, EventType.Command | EventType.FileSave);
+            EventManager.AddEventHandler(this, EventType.Command | EventType.FileSave | EventType.Keys | EventType.Shortcut);
 
             watcher = new FileSystemWatcher();
             watcher.NotifyFilter = NotifyFilters.LastWrite;
             watcher.Changed += new FileSystemEventHandler(OnFileChange);
+
+            PluginBase.MainForm.RegisterShortcutItem("ColtPlugin.MakeItLive", MakeItLiveKeys);
         }
 
         #endregion
@@ -349,6 +373,60 @@ namespace ColtPlugin
         }
 
         #endregion
+
+        /// <summary>
+        /// Generate meta tags
+        /// </summary>
+        private void MakeItLive()
+        {
+            ScintillaNet.ScintillaControl sci = PluginBase.MainForm.CurrentDocument.SciControl;
+            if (sci == null) 
+                return;
+
+            IASContext context = ASCompletion.Context.ASContext.Context;
+            if (context.CurrentClass == null || context.CurrentClass.IsVoid() || context.CurrentClass.LineFrom == 0) 
+                return;
+
+            // make member live
+            int originalPos = sci.CurrentPos;
+            int pos;
+            int line;
+            string indent;
+            MemberModel member = context.CurrentMember;
+            FlagType mask = FlagType.Function | FlagType.Dynamic;
+            if (member != null && (member.Flags & mask) == mask) 
+            {
+                line = context.CurrentMember.LineFrom;
+                indent = LineIndentPosition(sci, line);
+                pos = sci.PositionFromLine(line) + indent.Length;
+                string insert = "[LiveCodeUpdateListener(method=\"" + member.Name + "\")]\n" + indent;
+                sci.SetSel(pos, pos);
+                sci.ReplaceSel(insert);
+                originalPos += insert.Length;
+            }
+
+            // make class live
+            if (!Regex.IsMatch(sci.Text, "\\[Live\\]"))
+            {
+                line = context.CurrentClass.LineFrom;
+                indent = LineIndentPosition(sci, line);
+                pos = sci.PositionFromLine(line) + indent.Length;
+                string insert = "[Live]\n" + indent;
+                sci.SetSel(pos, pos);
+                sci.ReplaceSel(insert);
+                originalPos += insert.Length;
+            }
+
+            sci.SetSel(originalPos, originalPos);
+        }
+
+        private string LineIndentPosition(ScintillaNet.ScintillaControl sci, int line)
+        {
+            string txt = sci.GetLine(line);
+            for (int i = 0; i < txt.Length; i++)
+                if (txt[i] > 32) return txt.Substring(0, i);
+            return "";
+        }
 
         /// <summary>
         /// Opens the project in COLT
