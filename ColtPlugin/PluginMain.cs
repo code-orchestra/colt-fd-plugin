@@ -500,7 +500,8 @@ namespace ColtPlugin
 
             if (settingObject.FullConfig)
             {
-                stream.WriteLine("compilerOptions=-load-config+\\=\"" + EscapeForCOLT(project.GetAbsolutePath(configCopy)) + "\"");
+                stream.WriteLine("useCustomSDKConfiguration=true");
+                stream.WriteLine("customConfigPath=" + EscapeForCOLT(project.GetAbsolutePath(configCopy)) + "\"");
             }
             
             stream.WriteLine("target=SWF"); // use project.MovieOptions.Platform switch ??
