@@ -142,7 +142,13 @@ namespace ColtPlugin
                     else if (cmd == "ASCompletion.ClassPath")
                     {
                         // apparently project setting changes; reopen already opened COLT project
-                        if (active) OpenInCOLT();
+                        if (active && (settingObject.AlwaysOverwriteProjects || (MessageBox.Show(
+                                LocaleHelper.GetString("SettingsChanged.DialogText"),
+                                LocaleHelper.GetString("SettingsChanged.DialogTitle"),
+                                MessageBoxButtons.YesNo) == DialogResult.Yes)))
+                        {
+                            OpenInCOLT();
+                        }
                     }
                     else if (cmd == "ProjectManager.Menu")
                     {
@@ -510,7 +516,7 @@ namespace ColtPlugin
             int lastSlash = outputPath.LastIndexOf(@"\");
             if (lastSlash > -1)
             {
-                stream.WriteLine("outputPath=" + outputPath.Substring(0, lastSlash));
+                stream.WriteLine("outputPath=" + EscapeForCOLT(project.GetAbsolutePath(outputPath.Substring(0, lastSlash))));
                 stream.WriteLine("outputFileName=" + outputPath.Substring(lastSlash + 1));
             }
 

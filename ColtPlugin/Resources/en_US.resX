@@ -123,4 +123,10 @@
   <data name="Info.Description" xml:space="preserve">
     <value>COLT Plugin for FlashDevelop.</value>
   </data>
+  <data name="SettingsChanged.DialogText" xml:space="preserve">
+    <value>Do you want to overwrite COLT project to reflect new settings?</value>
+  </data>
+  <data name="SettingsChanged.DialogTitle" xml:space="preserve">
+    <value>Project settings have changed</value>
+  </data>
 </root>
