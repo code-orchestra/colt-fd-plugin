@@ -507,10 +507,17 @@ namespace ColtPlugin
             stream.WriteLine("target=SWF"); // use project.MovieOptions.Platform switch ??
 
             String outputPath = project.OutputPath;
-            // fixme: colt does not take paths atm
             int lastSlash = outputPath.LastIndexOf(@"\");
-            if (lastSlash > -1) outputPath = outputPath.Substring(lastSlash + 1);
-            stream.WriteLine("outputFileName=" + outputPath);
+            if (lastSlash > -1)
+            {
+                stream.WriteLine("outputPath=" + outputPath.Substring(0, lastSlash));
+                stream.WriteLine("outputFileName=" + outputPath.Substring(lastSlash + 1));
+            }
+
+            else
+            {
+                stream.WriteLine("outputFileName=" + outputPath);
+            }
 
             stream.WriteLine("useDefaultSDKConfiguration=true");
 
@@ -518,6 +525,11 @@ namespace ColtPlugin
             foreach (String sourcePath in project.SourcePaths)
                 sourcePaths += EscapeForCOLT(project.GetAbsolutePath(sourcePath)) + ";";
             stream.WriteLine("sourcePaths=" + sourcePaths);
+
+            // size, frame rate and background color
+            stream.WriteLine("compilerOptions=-default-size " + project.MovieOptions.Width + " " + project.MovieOptions.Height +
+                " -default-frame-rate " + project.MovieOptions.Fps +
+                " -default-background-color " + project.MovieOptions.BackgroundColorInt);
 
             stream.Close();
 
