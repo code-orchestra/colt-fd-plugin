@@ -521,7 +521,15 @@ namespace ColtPlugin
             stream.Close();
 
             // Open it with default app (COLT)
-            Process.Start(coltFileName);
+            try
+            {
+                Process.Start(coltFileName);
+            }
+
+            catch (Exception e)
+            {
+                TraceManager.Add("Could not start COLT: " + e.ToString());
+            }
 
             // Remove older *.colt files
             foreach (String oldFile in Directory.GetFiles(coltFolderPath, "*.colt"))
