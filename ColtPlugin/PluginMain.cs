@@ -31,7 +31,6 @@ namespace ColtPlugin
         private Settings settingObject;
         private ToolStripMenuItem menuItem;
         private ToolStripButton toolbarButton;
-        private Boolean active = false;
         private FileSystemWatcher watcher;
         private String pathToLog;
         private System.Timers.Timer timer;
@@ -134,21 +133,8 @@ namespace ColtPlugin
                         Boolean as3projectIsOpen = (project != null) && (project.Language == "as3");
                         if (menuItem != null) menuItem.Enabled = as3projectIsOpen;
                         if (toolbarButton != null) toolbarButton.Enabled = as3projectIsOpen;
-                        // deactivate
-                        active = false;
-                        if (watcher != null) watcher.EnableRaisingEvents = false;
-                        if (timer != null) { timer.Stop(); timer = null; }
-                    }
-                    else if (cmd == "ASCompletion.ClassPath")
-                    {
-                        // apparently project setting changes; reopen already opened COLT project
-                        if (active && (settingObject.AlwaysOverwriteProjects || (MessageBox.Show(
-                                LocaleHelper.GetString("SettingsChanged.DialogText"),
-                                LocaleHelper.GetString("SettingsChanged.DialogTitle"),
-                                MessageBoxButtons.YesNo) == DialogResult.Yes)))
-                        {
-                            OpenInCOLT();
-                        }
+                        // modified or new project - reconnect in any case
+                        ConnectToCOLT();
                     }
                     else if (cmd == "ProjectManager.Menu")
                     {
@@ -163,7 +149,7 @@ namespace ColtPlugin
                     break;
                 
                 case EventType.FileSave:
-                    if (active) ClearErrors();
+                    if (watcher.EnableRaisingEvents) ClearErrors();
                     break;
 
                 case EventType.Keys: // shortcut pressed
@@ -244,6 +230,7 @@ namespace ColtPlugin
         private void CreateMenuItem(ToolStripMenuItem projectMenu)
         {
             menuItem = new ToolStripMenuItem(buttonText, GetImage("colt.png"), new EventHandler(OnClick), null);
+            menuItem.Enabled = false;
             projectMenu.DropDownItems.Add(menuItem);
         }
 
@@ -269,7 +256,6 @@ namespace ColtPlugin
 
         private void OnClick(Object sender, System.EventArgs e)
         {
-            active = true;
             OpenInCOLT();
         }
 
@@ -332,35 +318,43 @@ namespace ColtPlugin
             String incremental = "colt\\incremental";
             String[] sources = PluginBase.CurrentProject.SourcePaths;
 
-            // [09.05.2013 17:26:54] Philippe Elsass: make sure you send the log line by line to the Output
+            // send the log line by line
             String[] messageLines = message.Split(new Char[] {'\r', '\n'});
             bool hasErrors = false;
             foreach (String line in messageLines) if (line.Length > 0)
             {
-                // [08.05.2013 18:04:15] Philippe Elsass: you can also specify '-3' as 2nd parameter to the traces (error level)
-                // [08.05.2013 18:05:02] Philippe Elsass: so it will appear in red in the output and have an error icon in the results panel
+                int errorLevel = -3;
                 if (line.Contains(incremental))
                 {
-                    // carefully take the file name out
-                    String file = line.Substring(0, line.IndexOf("): col"));
-                    file = file.Substring(0, file.LastIndexOf("("));
-                    file = file.Substring(file.IndexOf(incremental) + incremental.Length + 1);
-
-                    // look for it in all source folders
-                    for (int i = 0; i < sources.Length; i++)
+                    try
                     {
-                        if (File.Exists(PluginBase.CurrentProject.GetAbsolutePath(Path.Combine(sources[i], file))))
+                        // carefully take the file name out
+                        String file = line.Substring(0, line.IndexOf("): col"));
+                        file = file.Substring(0, file.LastIndexOf("("));
+                        file = file.Substring(file.IndexOf(incremental) + incremental.Length + 1);
+
+                        // look for it in all source folders
+                        for (int i = 0; i < sources.Length; i++)
                         {
-                            TraceManager.Add(line.Replace(incremental, sources[i]), -3);
-                            hasErrors = true;
-                            break;
+                            if (File.Exists(PluginBase.CurrentProject.GetAbsolutePath(Path.Combine(sources[i], file))))
+                            {
+                                TraceManager.Add(line.Replace(incremental, sources[i]), errorLevel);
+                                hasErrors = true;
+                                break;
+                            }
                         }
+                    }
+
+                    catch (Exception)
+                    {
+                        // unexpected format, send as is
+                        TraceManager.Add(line, errorLevel);
                     }
                 }
                 else
                 {
                     // send as is
-                    TraceManager.Add(line, -3);
+                    TraceManager.Add(line, errorLevel);
                 }
             }
 
@@ -435,6 +429,33 @@ namespace ColtPlugin
         }
 
         /// <summary>
+        /// Connects to COLT
+        /// </summary>
+        private void ConnectToCOLT(Boolean create = false)
+        {
+            // todo: clean up after previous connection
+
+            // for now, shut down errors log watcher and its timer
+            watcher.EnableRaisingEvents = false;
+            if (timer != null) { timer.Stop(); timer = null; }
+
+            // todo: if current project is opened in COLT - connect to it
+
+            // for now, create the folder and subscribe to errors log updates
+            IProject project = PluginBase.CurrentProject;
+
+            String coltFolderPath = project.GetAbsolutePath(settingObject.WorkingFolder);
+            if (create && !Directory.Exists(coltFolderPath)) Directory.CreateDirectory(coltFolderPath);
+
+            if (Directory.Exists(coltFolderPath))
+            {
+                pathToLog = Path.Combine(coltFolderPath, "compile_errors.log");
+                watcher.Path = coltFolderPath;
+                watcher.EnableRaisingEvents = true;
+            }
+        }
+
+        /// <summary>
         /// Opens the project in COLT
         /// </summary>
         private void OpenInCOLT()
@@ -468,15 +489,11 @@ namespace ColtPlugin
             
 
             // Create COLT subfolder if does not exist yet
-            String coltFolderPath = project.GetAbsolutePath(settingObject.WorkingFolder);
-            if (!Directory.Exists(coltFolderPath)) Directory.CreateDirectory(coltFolderPath);
-
             // While at that, start listening for colt/compile_errors.log changes
-            pathToLog = Path.Combine(coltFolderPath, "compile_errors.log");
-            watcher.Path = coltFolderPath;
-            watcher.EnableRaisingEvents = true;
+            ConnectToCOLT(true);
 
-            // Create COLT project with random name (if we'd update same file - are there file locks? how to reopen in colt?)
+
+            // Create COLT project with random name (todo: separate buttons for project export and project open)
             String coltFileName = project.GetAbsolutePath(Path.Combine(settingObject.WorkingFolder, System.Guid.NewGuid() + ".colt"));
             StreamWriter stream = File.CreateText(coltFileName);
 
@@ -551,7 +568,7 @@ namespace ColtPlugin
             }
 
             // Remove older *.colt files
-            foreach (String oldFile in Directory.GetFiles(coltFolderPath, "*.colt"))
+            foreach (String oldFile in Directory.GetFiles(project.GetAbsolutePath(settingObject.WorkingFolder), "*.colt"))
             {
                 if (!coltFileName.Contains(Path.GetFileName(oldFile)))
                 {

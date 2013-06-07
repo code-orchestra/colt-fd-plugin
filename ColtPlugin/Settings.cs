@@ -11,7 +11,6 @@ namespace ColtPlugin
     {
         private String workingFolder = "colt";
         private Boolean fullConfig = false;
-        private Boolean alwaysOverwriteProjects = false;
         
         /// <summary> 
         /// Get and sets colt folder
@@ -33,17 +32,6 @@ namespace ColtPlugin
         {
             get { return this.fullConfig; }
             set { this.fullConfig = value; }
-        }
-
-        /// <summary> 
-        /// Get and sets full config flag
-        /// </summary>
-        [DisplayName("Always overwrite COLT projects")]
-        [Description("Select this option to always overwrite COLT projects when FD project settings change."), DefaultValue(false)]
-        public Boolean AlwaysOverwriteProjects
-        {
-            get { return this.alwaysOverwriteProjects; }
-            set { this.alwaysOverwriteProjects = value; }
         }
 
     }
