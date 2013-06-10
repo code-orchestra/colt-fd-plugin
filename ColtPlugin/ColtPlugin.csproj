@@ -142,4 +142,8 @@
       <Name>PluginCore</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\colt_run.png" />
+    <EmbeddedResource Include="Resources\colt_save.png" />
+  </ItemGroup>
 </Project>

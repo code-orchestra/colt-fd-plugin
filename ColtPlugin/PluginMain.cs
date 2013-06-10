@@ -26,11 +26,10 @@ namespace ColtPlugin
         private String pluginHelp = "makc3d.wordpress.com/about/";
         private String pluginDesc = "COLT FD Plugin";
         private String pluginAuth = "Makc"; // as if
-        private String buttonText = "Open in COLT";
         private String settingFilename;
         private Settings settingObject;
         private ToolStripMenuItem menuItem;
-        private ToolStripButton toolbarButton;
+        private ToolStripButton toolbarButton, toolbarButton2;
         private FileSystemWatcher watcher;
         private String pathToLog;
         private System.Timers.Timer timer;
@@ -133,6 +132,7 @@ namespace ColtPlugin
                         Boolean as3projectIsOpen = (project != null) && (project.Language == "as3");
                         if (menuItem != null) menuItem.Enabled = as3projectIsOpen;
                         if (toolbarButton != null) toolbarButton.Enabled = as3projectIsOpen;
+                        if (toolbarButton2 != null) toolbarButton2.Enabled = as3projectIsOpen && (GetCOLTFile() != null);
                         // modified or new project - reconnect in any case
                         ConnectToCOLT();
                     }
@@ -144,7 +144,8 @@ namespace ColtPlugin
                     else if (cmd == "ProjectManager.ToolBar")
                     {
                         Object toolStrip = (e as DataEvent).Data;
-                        CreateToolbarButton(toolStrip as ToolStrip);
+                        toolbarButton = CreateToolbarButton(toolStrip as ToolStrip, "colt_save.png", "Menu.ExportToCOLT", new EventHandler(OnClick));
+                        toolbarButton2 = CreateToolbarButton(toolStrip as ToolStrip, "colt_run.png", "Menu.OpenInCOLT", new EventHandler(OnClick2));
                     }
                     break;
                 
@@ -206,7 +207,6 @@ namespace ColtPlugin
                     break;
             }
             pluginDesc = LocaleHelper.GetString("Info.Description");
-            buttonText = LocaleHelper.GetString("Info.ButtonText");
         }
 
         /// <summary>
@@ -229,19 +229,20 @@ namespace ColtPlugin
 
         private void CreateMenuItem(ToolStripMenuItem projectMenu)
         {
-            menuItem = new ToolStripMenuItem(buttonText, GetImage("colt.png"), new EventHandler(OnClick), null);
+            menuItem = new ToolStripMenuItem(LocaleHelper.GetString("Menu.ExportToCOLT"), GetImage("colt_save.png"), new EventHandler(OnClick), null);
             menuItem.Enabled = false;
             projectMenu.DropDownItems.Add(menuItem);
         }
 
-        private void CreateToolbarButton(ToolStrip toolStrip)
+        private ToolStripButton CreateToolbarButton(ToolStrip toolStrip, String image, String hint, EventHandler handler)
         {
-            toolbarButton = new ToolStripButton();
-            toolbarButton.Image = GetImage("colt.png");
-            toolbarButton.Text = buttonText;
-            toolbarButton.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            toolbarButton.Click += new EventHandler(OnClick);
-            toolStrip.Items.Add(toolbarButton);
+            ToolStripButton button = new ToolStripButton();
+            button.Image = GetImage(image);
+            button.Text = LocaleHelper.GetString(hint);
+            button.DisplayStyle = ToolStripItemDisplayStyle.Image;
+            button.Click += handler;
+            toolStrip.Items.Add(button);
+            return button;
         }
 
         /// <summary>
@@ -257,6 +258,11 @@ namespace ColtPlugin
         private void OnClick(Object sender, System.EventArgs e)
         {
             OpenInCOLT();
+        }
+
+        private void OnClick2(Object sender, System.EventArgs e)
+        {
+            OpenInCOLT(false);
         }
 
         #endregion
@@ -374,6 +380,8 @@ namespace ColtPlugin
 
         #endregion
 
+        #region Meta tags
+
         /// <summary>
         /// Generate meta tags
         /// </summary>
@@ -428,6 +436,8 @@ namespace ColtPlugin
             return "";
         }
 
+        #endregion
+
         /// <summary>
         /// Connects to COLT
         /// </summary>
@@ -458,7 +468,62 @@ namespace ColtPlugin
         /// <summary>
         /// Opens the project in COLT
         /// </summary>
-        private void OpenInCOLT()
+        private void OpenInCOLT(Boolean create = true)
+        {
+            // Create COLT subfolder if does not exist yet
+            // While at that, start listening for colt/compile_errors.log changes
+            ConnectToCOLT(true);
+
+
+            // Find or create COLT project to open
+            String coltFileName = create ? ExportCOLTFile() : GetCOLTFile();
+
+
+            // Open it with default app (COLT)
+            try
+            {
+                if (coltFileName != null)
+                {
+                    Process.Start(coltFileName);
+                }
+
+                else
+                {
+                    toolbarButton2.Enabled = false;
+                }
+            }
+
+            catch (Exception e)
+            {
+                TraceManager.Add("Could not start COLT: " + e.ToString());
+            }
+
+        }
+
+        /// <summary>
+        /// Returns path to existing COLT project or null.
+        /// </summary>
+        private String GetCOLTFile()
+        {
+            IProject project = PluginBase.CurrentProject;
+
+            try
+            {
+                String[] files = Directory.GetFiles(project.GetAbsolutePath(settingObject.WorkingFolder), "*.colt");
+                if (files.Length > 0) return files[0];
+            }
+
+            catch (Exception)
+            {
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Exports the project to COLT and returns path to it or null.
+        /// </summary>
+        private String ExportCOLTFile()
         {
             // our options: parse project.ProjectPath (xml file) or use api
             AS3Project project = (AS3Project)PluginBase.CurrentProject;
@@ -476,7 +541,7 @@ namespace ColtPlugin
 
                     EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.BuildProject", null));
 
-                    return;
+                    return null;
                 }
 
                 // Create config copy with <file-specs>...</file-specs> commented out
@@ -486,14 +551,9 @@ namespace ColtPlugin
                         .Replace("<file-specs", "<!-- file-specs")
                         .Replace("/file-specs>", "/file-specs -->"));
             }
-            
-
-            // Create COLT subfolder if does not exist yet
-            // While at that, start listening for colt/compile_errors.log changes
-            ConnectToCOLT(true);
 
 
-            // Create COLT project with random name (todo: separate buttons for project export and project open)
+            // Create COLT project with random name
             String coltFileName = project.GetAbsolutePath(Path.Combine(settingObject.WorkingFolder, System.Guid.NewGuid() + ".colt"));
             StreamWriter stream = File.CreateText(coltFileName);
 
@@ -510,9 +570,9 @@ namespace ColtPlugin
             stream.WriteLine("libraryPaths=" + libraryPaths);
 
             stream.WriteLine("clearMessages=true");
-            
+
             stream.WriteLine("targetPlayerVersion=" + project.MovieOptions.Version + ".0");
-            
+
             stream.WriteLine("mainClass=" + EscapeForCOLT(project.GetAbsolutePath(project.CompileTargets[0])));
 
             stream.WriteLine("maxLoopIterations=10000");
@@ -526,7 +586,7 @@ namespace ColtPlugin
                 stream.WriteLine("useCustomSDKConfiguration=true");
                 stream.WriteLine("customConfigPath=" + EscapeForCOLT(project.GetAbsolutePath(configCopy)) + "\"");
             }
-            
+
             stream.WriteLine("target=SWF"); // use project.MovieOptions.Platform switch ??
 
             String outputPath = project.OutputPath;
@@ -549,23 +609,41 @@ namespace ColtPlugin
                 sourcePaths += EscapeForCOLT(project.GetAbsolutePath(sourcePath)) + ";";
             stream.WriteLine("sourcePaths=" + sourcePaths);
 
+
             // size, frame rate and background color
-            stream.WriteLine("compilerOptions=-default-size " + project.MovieOptions.Width + " " + project.MovieOptions.Height +
-                " -default-frame-rate " + project.MovieOptions.Fps +
-                " -default-background-color " + project.MovieOptions.BackgroundColorInt);
+            String[] coltAdditionalOptionsKeys = {
+                "-default-size",
+                "-default-frame-rate",
+                "-default-background-color"
+            };
+            String[] coltAdditionalOptions = {
+                coltAdditionalOptionsKeys[0] + " " + project.MovieOptions.Width + " " + project.MovieOptions.Height,
+                coltAdditionalOptionsKeys[1] + " " + project.MovieOptions.Fps,
+                coltAdditionalOptionsKeys[2] + " " + project.MovieOptions.BackgroundColorInt
+            };
+
+            String additionalOptions = "";
+            foreach (String option in project.CompilerOptions.Additional)
+            {
+                for (int i = 0; i < coltAdditionalOptionsKeys.Length; i++)
+                {
+                    if (option.Contains(coltAdditionalOptionsKeys[i]))
+                    {
+                        coltAdditionalOptions[i] = "";
+                    }
+                }
+                additionalOptions += option + " ";
+            }
+
+            foreach (String option in coltAdditionalOptions)
+            {
+                additionalOptions += option + " ";
+            }
+
+            stream.WriteLine("compilerOptions=" + additionalOptions.Trim());
 
             stream.Close();
 
-            // Open it with default app (COLT)
-            try
-            {
-                Process.Start(coltFileName);
-            }
-
-            catch (Exception e)
-            {
-                TraceManager.Add("Could not start COLT: " + e.ToString());
-            }
 
             // Remove older *.colt files
             foreach (String oldFile in Directory.GetFiles(project.GetAbsolutePath(settingObject.WorkingFolder), "*.colt"))
@@ -575,6 +653,13 @@ namespace ColtPlugin
                     File.Delete(oldFile);
                 }
             }
+
+
+            // Enable "open" button
+            toolbarButton2.Enabled = true;
+
+
+            return coltFileName;
         }
 
         private String EscapeForCOLT(String path)

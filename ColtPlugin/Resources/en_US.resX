@@ -117,10 +117,13 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Info.ButtonText" xml:space="preserve">
-    <value>Open in COLT</value>
-  </data>
   <data name="Info.Description" xml:space="preserve">
     <value>COLT Plugin for FlashDevelop.</value>
+  </data>
+  <data name="Menu.ExportToCOLT" xml:space="preserve">
+    <value>Export to COLT</value>
+  </data>
+  <data name="Menu.OpenInCOLT" xml:space="preserve">
+    <value>Open in COLT</value>
   </data>
 </root>
