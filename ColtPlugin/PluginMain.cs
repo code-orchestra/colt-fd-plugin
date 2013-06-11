@@ -664,6 +664,7 @@ namespace ColtPlugin
 
         private String EscapeForCOLT(String path)
         {
+            if (path == null) return "";
             // some standard escape ??
             return path.Replace(@"\", @"\\").Replace(":", @"\:").Replace("=", @"\=");
         }
