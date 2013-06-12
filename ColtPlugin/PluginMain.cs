@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Reflection;
 using WeifenLuo.WinFormsUI.Docking;
 using ColtPlugin.Resources;
+using ColtPlugin.Rpc;
 using PluginCore.Localization;
 using PluginCore.Utilities;
 using PluginCore.Managers;
@@ -23,7 +24,7 @@ namespace ColtPlugin
 	{
         private String pluginName = "ColtPlugin";
         private String pluginGuid = "12600B5B-D185-4171-A362-25C5F73548C6";
-        private String pluginHelp = "makc3d.wordpress.com/about/";
+        private String pluginHelp = "codeorchestra.zendesk.com/home/";
         private String pluginDesc = "COLT FD Plugin";
         private String pluginAuth = "Makc"; // as if
         private String settingFilename;
@@ -257,12 +258,12 @@ namespace ColtPlugin
 
         private void OnClick(Object sender, System.EventArgs e)
         {
-            OpenInCOLT();
+            new AppStarter(ExportAndOpen);
         }
 
         private void OnClick2(Object sender, System.EventArgs e)
         {
-            OpenInCOLT(false);
+            new AppStarter(FindAndOpen);
         }
 
         #endregion
@@ -468,36 +469,67 @@ namespace ColtPlugin
         /// <summary>
         /// Opens the project in COLT
         /// </summary>
-        private void OpenInCOLT(Boolean create = true)
+        private void FindAndOpen()
         {
             // Create COLT subfolder if does not exist yet
             // While at that, start listening for colt/compile_errors.log changes
             ConnectToCOLT(true);
 
-
-            // Find or create COLT project to open
-            String coltFileName = create ? ExportCOLTFile() : GetCOLTFile();
-
+            // Find COLT project to open
+            String coltFileName = GetCOLTFile();
 
             // Open it with default app (COLT)
+            if (coltFileName != null)
+            {
+                try
+                {
+                    JsonRpcClient client = new JsonRpcClient();
+                    client.Invoke("loadProject", new Object[] { "TEST", coltFileName });
+                }
+                catch (Exception details)
+                {
+                    TraceManager.Add("FindAndOpen failed\n" + details, -1);
+                }
+            }
+
+            else
+            {
+                toolbarButton2.Enabled = false;
+            }
+
+        }
+
+        private void ExportAndOpen()
+        {
+            // Create COLT subfolder if does not exist yet
+            // While at that, start listening for colt/compile_errors.log changes
+            ConnectToCOLT(true);
+
+            // Create COLT project in it
+            COLTRemoteProject project = ExportCOLTProject();
             try
             {
-                if (coltFileName != null)
-                {
-                    Process.Start(coltFileName);
-                }
-
-                else
-                {
-                    toolbarButton2.Enabled = false;
-                }
+                JsonRpcClient client = new JsonRpcClient();
+                client.Invoke("createProject", new Object[] { "TEST", project });
+//Object state = client.Invoke("getState", new Object[] { "TEST" });
+//TraceManager.Add("State: " + state);
             }
-
-            catch (Exception e)
+            catch (Exception details)
             {
-                TraceManager.Add("Could not start COLT: " + e.ToString());
+                TraceManager.Add("ExportAndOpen failed\n" + details, -1);
             }
 
+            // Remove older *.colt files
+            foreach (String oldFile in Directory.GetFiles(Path.GetDirectoryName(project.path), "*.colt"))
+            {
+                if (!project.path.Contains(Path.GetFileName(oldFile)))
+                {
+                    File.Delete(oldFile);
+                }
+            }
+
+            // Enable "open" button
+            toolbarButton2.Enabled = true;
         }
 
         /// <summary>
@@ -520,10 +552,7 @@ namespace ColtPlugin
             return null;
         }
 
-        /// <summary>
-        /// Exports the project to COLT and returns path to it or null.
-        /// </summary>
-        private String ExportCOLTFile()
+        private COLTRemoteProject ExportCOLTProject()
         {
             // our options: parse project.ProjectPath (xml file) or use api
             AS3Project project = (AS3Project)PluginBase.CurrentProject;
@@ -553,61 +582,44 @@ namespace ColtPlugin
             }
 
 
-            // Create COLT project with random name
-            String coltFileName = project.GetAbsolutePath(Path.Combine(settingObject.WorkingFolder, System.Guid.NewGuid() + ".colt"));
-            StreamWriter stream = File.CreateText(coltFileName);
+            // Export COLT project
+            COLTRemoteProject result = new COLTRemoteProject();
 
+            result.path = project.GetAbsolutePath(Path.Combine(settingObject.WorkingFolder, System.Guid.NewGuid() + ".colt"));
 
-            // Write current project settings there
-            stream.WriteLine("#Generated by FD plugin");
+            result.name = project.Name;
 
-            stream.WriteLine("name=" + project.Name);
+            String[] libraryPaths = project.CompilerOptions.LibraryPaths.Clone() as String[];
+            for (int i=0; i<libraryPaths.Length; i++) libraryPaths[i] = project.GetAbsolutePath(libraryPaths[i]);
+            result.libraries = libraryPaths;
 
-            MxmlcOptions options = project.CompilerOptions;
-            String libraryPaths = "";
-            foreach (String libraryPath in options.LibraryPaths)
-                libraryPaths += EscapeForCOLT(project.GetAbsolutePath(libraryPath)) + ";";
-            stream.WriteLine("libraryPaths=" + libraryPaths);
+            result.targetPlayerVersion = project.MovieOptions.Version + ".0";
 
-            stream.WriteLine("clearMessages=true");
+            result.mainClass = project.GetAbsolutePath(project.CompileTargets[0]);
 
-            stream.WriteLine("targetPlayerVersion=" + project.MovieOptions.Version + ".0");
-
-            stream.WriteLine("mainClass=" + EscapeForCOLT(project.GetAbsolutePath(project.CompileTargets[0])));
-
-            stream.WriteLine("maxLoopIterations=10000");
-
-            stream.WriteLine("flexSDKPath=" + EscapeForCOLT(project.CurrentSDK));
-
-            stream.WriteLine("liveMethods=annotated");
+            result.flexSDKPath = project.CurrentSDK;
 
             if (settingObject.FullConfig)
             {
-                stream.WriteLine("useCustomSDKConfiguration=true");
-                stream.WriteLine("customConfigPath=" + EscapeForCOLT(project.GetAbsolutePath(configCopy)) + "\"");
+                result.customConfigPath = project.GetAbsolutePath(configCopy);
             }
-
-            stream.WriteLine("target=SWF"); // use project.MovieOptions.Platform switch ??
 
             String outputPath = project.OutputPath;
             int lastSlash = outputPath.LastIndexOf(@"\");
             if (lastSlash > -1)
             {
-                stream.WriteLine("outputPath=" + EscapeForCOLT(project.GetAbsolutePath(outputPath.Substring(0, lastSlash))));
-                stream.WriteLine("outputFileName=" + outputPath.Substring(lastSlash + 1));
+                result.outputPath = project.GetAbsolutePath(outputPath.Substring(0, lastSlash));
+                result.outputFileName = outputPath.Substring(lastSlash + 1);
             }
 
             else
             {
-                stream.WriteLine("outputFileName=" + outputPath);
+                result.outputFileName = outputPath;
             }
 
-            stream.WriteLine("useDefaultSDKConfiguration=true");
-
-            String sourcePaths = "";
-            foreach (String sourcePath in project.SourcePaths)
-                sourcePaths += EscapeForCOLT(project.GetAbsolutePath(sourcePath)) + ";";
-            stream.WriteLine("sourcePaths=" + sourcePaths);
+            String[] sourcePaths = project.SourcePaths.Clone() as String[];
+            for (int i=0; i<sourcePaths.Length; i++) sourcePaths[i] = project.GetAbsolutePath(sourcePaths[i]);
+            result.sources = sourcePaths;
 
 
             // size, frame rate and background color
@@ -640,33 +652,9 @@ namespace ColtPlugin
                 additionalOptions += option + " ";
             }
 
-            stream.WriteLine("compilerOptions=" + additionalOptions.Trim());
+            result.compilerOptions = additionalOptions.Trim();
 
-            stream.Close();
-
-
-            // Remove older *.colt files
-            foreach (String oldFile in Directory.GetFiles(project.GetAbsolutePath(settingObject.WorkingFolder), "*.colt"))
-            {
-                if (!coltFileName.Contains(Path.GetFileName(oldFile)))
-                {
-                    File.Delete(oldFile);
-                }
-            }
-
-
-            // Enable "open" button
-            toolbarButton2.Enabled = true;
-
-
-            return coltFileName;
-        }
-
-        private String EscapeForCOLT(String path)
-        {
-            if (path == null) return "";
-            // some standard escape ??
-            return path.Replace(@"\", @"\\").Replace(":", @"\:").Replace("=", @"\=");
+            return result;
         }
 	}
 }
