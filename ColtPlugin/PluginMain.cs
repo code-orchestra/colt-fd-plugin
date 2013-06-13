@@ -269,12 +269,28 @@ namespace ColtPlugin
 
         private void OnClick(Object sender, System.EventArgs e)
         {
-            new AppStarter(ExportAndOpen, settingObject.AutoRun);
+            if (settingObject.SecurityToken != null)
+            {
+                new AppStarter(ExportAndOpen, settingObject.AutoRun);
+            }
+
+            else
+            {
+                new AppStarter(GetSecurityToken, true);
+            }
         }
 
         private void OnClick2(Object sender, System.EventArgs e)
         {
-            new AppStarter(FindAndOpen, settingObject.AutoRun);
+            if (settingObject.SecurityToken != null)
+            {
+                new AppStarter(FindAndOpen, settingObject.AutoRun);
+            }
+
+            else
+            {
+                new AppStarter(GetSecurityToken, true);
+            }
         }
 
         #endregion
@@ -292,6 +308,8 @@ namespace ColtPlugin
             {
                 Object obj = ObjectSerializer.Deserialize(settingFilename, settingObject);
                 settingObject = (Settings)obj;
+// debug
+//settingObject.SecurityToken = null;
             }
         }
 
@@ -450,6 +468,43 @@ namespace ColtPlugin
 
         #endregion
 
+        private void GetSecurityToken(Boolean param)
+        {
+            JsonRpcClient client = new JsonRpcClient();
+
+            try
+            {
+                // knock
+                client.Invoke("requestShortCode", new Object[] { LocaleHelper.GetString("Info.Description") });
+            }
+
+            catch (Exception details)
+            {
+                TraceManager.Add(details.ToString(), -1);
+                return;
+            }
+
+            Forms.FirstTimeDialog dialog = new Forms.FirstTimeDialog(settingObject.InterceptBuilds);
+            dialog.ShowDialog();
+
+            // regardless of the code, set InterceptBuilds option
+            settingObject.InterceptBuilds = dialog.InterceptBuilds;
+
+            if ((dialog.ShortCode != null)&&(dialog.ShortCode.Length == 4))
+            {
+                // got short code - request security token
+                try
+                {
+                    settingObject.SecurityToken = client.Invoke("obtainAuthToken", new Object[] { dialog.ShortCode }).ToString();
+                }
+
+                catch (Exception details)
+                {
+                    TraceManager.Add(details.ToString(), -1);
+                }
+            }
+        }
+
         /// <summary>
         /// Connects to COLT (todo: rename)
         /// </summary>
@@ -489,7 +544,7 @@ namespace ColtPlugin
             try
             {
                 JsonRpcClient client = new JsonRpcClient();
-                client.Invoke("runProductionCompilation", new Object[] { "TEST", /*run*/false });
+                client.Invoke("runProductionCompilation", new Object[] { settingObject.SecurityToken, /*run*/false });
 
                 // leverage FD launch mechanism
                 // todo: does runProductionCompilation block? no idea atm
@@ -523,8 +578,8 @@ namespace ColtPlugin
                 try
                 {
                     JsonRpcClient client = new JsonRpcClient();
-                    client.Invoke("loadProject", new Object[] { "TEST", coltFileName });
-                    if (run) client.Invoke("runBaseCompilation", new Object[] { "TEST" });
+                    client.Invoke("loadProject", new Object[] { settingObject.SecurityToken, coltFileName });
+                    if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });
                 }
                 catch (Exception details)
                 {
@@ -552,8 +607,8 @@ namespace ColtPlugin
                 try
                 {
                     JsonRpcClient client = new JsonRpcClient();
-                    client.Invoke("createProject", new Object[] { "TEST", project });
-                    if (run) client.Invoke("runBaseCompilation", new Object[] { "TEST" });
+                    client.Invoke("createProject", new Object[] { settingObject.SecurityToken, project });
+                    if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });
                 }
                 catch (Exception details)
                 {

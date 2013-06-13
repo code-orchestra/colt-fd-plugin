@@ -9,6 +9,8 @@ namespace ColtPlugin
     [Serializable]
     public class Settings
     {
+        public String SecurityToken;
+
         private String workingFolder = "colt";
         private Boolean autorun = true;
         private Boolean fullConfig = false;
