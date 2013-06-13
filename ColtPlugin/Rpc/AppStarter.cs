@@ -6,25 +6,27 @@
     using System.Net;
     using System.Timers;
 
-    public delegate void AppStarterDelegate ();
+    public delegate void AppStarterDelegate(Boolean param);
 
-    class AppStarter
+    public class AppStarter
     {
         private AppStarterDelegate callback;
+        private Boolean callbackParam;
         private String tempColtFile;
         private Timer timer;
         private int count;
 
-        public AppStarter(AppStarterDelegate onConnected)
+        public AppStarter(AppStarterDelegate onConnected, Boolean onConnectedParam)
         {
             if (COLTIsRunning())
             {
-                onConnected();
+                onConnected(onConnectedParam);
             }
 
             else
             {
                 callback = onConnected;
+                callbackParam = onConnectedParam;
                 tempColtFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".colt");
 
                 File.CreateText(tempColtFile).Close();
@@ -57,7 +59,7 @@
             if (COLTIsRunning())
             {
                 // we are good to go
-                callback();
+                callback(callbackParam);
 
                 CleanUp();
                 return;
@@ -88,12 +90,21 @@
             WebClient client = new WebClient();
             try
             {
-                client.DownloadString("http://127.0.0.1:8091/crossdomain.xml");
-                return true;
+                // this must always throw
+                client.DownloadString("http://127.0.0.1:8091/rpc/coltService");
             }
 
-            catch (Exception)
+            catch (WebException e)
             {
+                if (e.Status == WebExceptionStatus.ProtocolError)
+                {
+                    if (((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.InternalServerError)
+                    {
+                        // until rpc is ready, this should be 404, not 500
+                        // todo: still does not work - colt crashes :S
+                        return true;
+                    }
+                }
             }
 
             return false;

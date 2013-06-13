@@ -35,6 +35,7 @@ namespace ColtPlugin
         private String pathToLog;
         private System.Timers.Timer timer;
         private Keys MakeItLiveKeys = Keys.Control | Keys.Shift | Keys.L;
+        private Boolean allowBuildInterception = true;
 
 	    #region Required Properties
 
@@ -148,6 +149,16 @@ namespace ColtPlugin
                         toolbarButton = CreateToolbarButton(toolStrip as ToolStrip, "colt_save.png", "Menu.ExportToCOLT", new EventHandler(OnClick));
                         toolbarButton2 = CreateToolbarButton(toolStrip as ToolStrip, "colt_run.png", "Menu.OpenInCOLT", new EventHandler(OnClick2));
                     }
+                    else if ((cmd == "ProjectManager.BuildingProject") || (cmd == "ProjectManager.TestingProject"))
+                    {
+                        // todo: FD might send this for projects other than PluginBase.CurrentProject - figure out how to catch that
+                        if (settingObject.InterceptBuilds && allowBuildInterception)
+                        {
+                            new AppStarter(ProductionBuild, cmd == "ProjectManager.TestingProject");
+
+                            e.Handled = true;
+                        }
+                    }
                     break;
                 
                 case EventType.FileSave:
@@ -258,12 +269,12 @@ namespace ColtPlugin
 
         private void OnClick(Object sender, System.EventArgs e)
         {
-            new AppStarter(ExportAndOpen);
+            new AppStarter(ExportAndOpen, settingObject.AutoRun);
         }
 
         private void OnClick2(Object sender, System.EventArgs e)
         {
-            new AppStarter(FindAndOpen);
+            new AppStarter(FindAndOpen, settingObject.AutoRun);
         }
 
         #endregion
@@ -440,7 +451,7 @@ namespace ColtPlugin
         #endregion
 
         /// <summary>
-        /// Connects to COLT
+        /// Connects to COLT (todo: rename)
         /// </summary>
         private void ConnectToCOLT(Boolean create = false)
         {
@@ -467,9 +478,37 @@ namespace ColtPlugin
         }
 
         /// <summary>
+        /// Makes production build and optionally runs it
+        /// </summary>
+        private void ProductionBuild(Boolean run)
+        {
+            // make sure the COLT project is open
+            // todo: currently no way to know if this fails, check the state before running the build in the future
+            if (toolbarButton2.Enabled) FindAndOpen(false); else ExportAndOpen(false);
+
+            try
+            {
+                JsonRpcClient client = new JsonRpcClient();
+                client.Invoke("runProductionCompilation", new Object[] { "TEST", /*run*/false });
+
+                // leverage FD launch mechanism
+                // todo: does runProductionCompilation block? no idea atm
+                if (run)
+                {
+                    EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.PlayOutput", null));
+                }
+            }
+            catch (Exception details)
+            {
+                TraceManager.Add(details.ToString(), -1);
+            }
+        }
+
+
+        /// <summary>
         /// Opens the project in COLT
         /// </summary>
-        private void FindAndOpen()
+        private void FindAndOpen(Boolean run)
         {
             // Create COLT subfolder if does not exist yet
             // While at that, start listening for colt/compile_errors.log changes
@@ -485,10 +524,11 @@ namespace ColtPlugin
                 {
                     JsonRpcClient client = new JsonRpcClient();
                     client.Invoke("loadProject", new Object[] { "TEST", coltFileName });
+                    if (run) client.Invoke("runBaseCompilation", new Object[] { "TEST" });
                 }
                 catch (Exception details)
                 {
-                    TraceManager.Add("FindAndOpen failed\n" + details, -1);
+                    TraceManager.Add(details.ToString(), -1);
                 }
             }
 
@@ -499,7 +539,7 @@ namespace ColtPlugin
 
         }
 
-        private void ExportAndOpen()
+        private void ExportAndOpen(Boolean run)
         {
             // Create COLT subfolder if does not exist yet
             // While at that, start listening for colt/compile_errors.log changes
@@ -507,29 +547,31 @@ namespace ColtPlugin
 
             // Create COLT project in it
             COLTRemoteProject project = ExportCOLTProject();
-            try
+            if (project != null)
             {
-                JsonRpcClient client = new JsonRpcClient();
-                client.Invoke("createProject", new Object[] { "TEST", project });
-//Object state = client.Invoke("getState", new Object[] { "TEST" });
-//TraceManager.Add("State: " + state);
-            }
-            catch (Exception details)
-            {
-                TraceManager.Add("ExportAndOpen failed\n" + details, -1);
-            }
-
-            // Remove older *.colt files
-            foreach (String oldFile in Directory.GetFiles(Path.GetDirectoryName(project.path), "*.colt"))
-            {
-                if (!project.path.Contains(Path.GetFileName(oldFile)))
+                try
                 {
-                    File.Delete(oldFile);
+                    JsonRpcClient client = new JsonRpcClient();
+                    client.Invoke("createProject", new Object[] { "TEST", project });
+                    if (run) client.Invoke("runBaseCompilation", new Object[] { "TEST" });
                 }
-            }
+                catch (Exception details)
+                {
+                    TraceManager.Add(details.ToString(), -1);
+                }
 
-            // Enable "open" button
-            toolbarButton2.Enabled = true;
+                // Remove older *.colt files
+                foreach (String oldFile in Directory.GetFiles(Path.GetDirectoryName(project.path), "*.colt"))
+                {
+                    if (!project.path.Contains(Path.GetFileName(oldFile)))
+                    {
+                        File.Delete(oldFile);
+                    }
+                }
+
+                // Enable "open" button
+                toolbarButton2.Enabled = true;
+            }
         }
 
         /// <summary>
@@ -568,7 +610,16 @@ namespace ColtPlugin
                 {
                     TraceManager.Add("Required file (" + projectName + "Config.xml) does not exist, project must be built first...", -1);
 
-                    EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.BuildProject", null));
+                    try
+                    {
+                        allowBuildInterception = false;
+                        EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.BuildProject", null));
+                    }
+
+                    finally
+                    {
+                        allowBuildInterception = true;
+                    }
 
                     return null;
                 }
