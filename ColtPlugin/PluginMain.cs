@@ -136,7 +136,7 @@ namespace ColtPlugin
                         if (toolbarButton != null) toolbarButton.Enabled = as3projectIsOpen;
                         if (toolbarButton2 != null) toolbarButton2.Enabled = as3projectIsOpen && (GetCOLTFile() != null);
                         // modified or new project - reconnect in any case
-                        ConnectToCOLT();
+                        WatchErrorsLog();
                     }
                     else if (cmd == "ProjectManager.Menu")
                     {
@@ -325,6 +325,29 @@ namespace ColtPlugin
 
         #region Logging errors
 
+        /// <summary>
+        /// Watches for COLT compilation errors log (optionally creates COLT folder if it does not exist)
+        /// </summary>
+        private void WatchErrorsLog(Boolean createFolder = false)
+        {
+            // shut down errors log watcher and its timer
+            watcher.EnableRaisingEvents = false;
+            if (timer != null) { timer.Stop(); timer = null; }
+
+            // create the folder and subscribe to errors log updates
+            IProject project = PluginBase.CurrentProject;
+
+            String coltFolderPath = project.GetAbsolutePath(settingObject.WorkingFolder);
+            if (createFolder && !Directory.Exists(coltFolderPath)) Directory.CreateDirectory(coltFolderPath);
+
+            if (Directory.Exists(coltFolderPath))
+            {
+                pathToLog = Path.Combine(coltFolderPath, "compile_errors.log");
+                watcher.Path = coltFolderPath;
+                watcher.EnableRaisingEvents = true;
+            }
+        }
+
         private void OnFileChange(Object sender, FileSystemEventArgs e)
         {
             if (e.FullPath.EndsWith("compile_errors.log"))
@@ -475,65 +498,30 @@ namespace ColtPlugin
             try
             {
                 // knock
-                client.Invoke("requestShortCode", new Object[] { LocaleHelper.GetString("Info.Description") });
+                client.Invoke("requestShortCode", new Object[] { LocaleHelper.GetString("Info.Description").TrimEnd(new Char[] { '.' }) });
+
+                // if still here, user needs to enter the code
+                Forms.FirstTimeDialog dialog = new Forms.FirstTimeDialog(settingObject.InterceptBuilds);
+                dialog.ShowDialog();
+
+                // regardless of the code, set InterceptBuilds option
+                settingObject.InterceptBuilds = dialog.InterceptBuilds;
+
+                if ((dialog.ShortCode != null) && (dialog.ShortCode.Length == 4))
+                {
+                    // short code looks right - request security token
+                    settingObject.SecurityToken = client.Invoke("obtainAuthToken", new Object[] { dialog.ShortCode }).ToString();
+                }
             }
 
             catch (Exception details)
             {
-                TraceManager.Add(details.ToString(), -1);
-                return;
-            }
-
-            Forms.FirstTimeDialog dialog = new Forms.FirstTimeDialog(settingObject.InterceptBuilds);
-            dialog.ShowDialog();
-
-            // regardless of the code, set InterceptBuilds option
-            settingObject.InterceptBuilds = dialog.InterceptBuilds;
-
-            if ((dialog.ShortCode != null)&&(dialog.ShortCode.Length == 4))
-            {
-                // got short code - request security token
-                try
-                {
-                    settingObject.SecurityToken = client.Invoke("obtainAuthToken", new Object[] { dialog.ShortCode }).ToString();
-                }
-
-                catch (Exception details)
-                {
-                    TraceManager.Add(details.ToString(), -1);
-                }
+                HandleAuthenticationExceptions(details);
             }
         }
 
         /// <summary>
-        /// Connects to COLT (todo: rename)
-        /// </summary>
-        private void ConnectToCOLT(Boolean create = false)
-        {
-            // todo: clean up after previous connection
-
-            // for now, shut down errors log watcher and its timer
-            watcher.EnableRaisingEvents = false;
-            if (timer != null) { timer.Stop(); timer = null; }
-
-            // todo: if current project is opened in COLT - connect to it
-
-            // for now, create the folder and subscribe to errors log updates
-            IProject project = PluginBase.CurrentProject;
-
-            String coltFolderPath = project.GetAbsolutePath(settingObject.WorkingFolder);
-            if (create && !Directory.Exists(coltFolderPath)) Directory.CreateDirectory(coltFolderPath);
-
-            if (Directory.Exists(coltFolderPath))
-            {
-                pathToLog = Path.Combine(coltFolderPath, "compile_errors.log");
-                watcher.Path = coltFolderPath;
-                watcher.EnableRaisingEvents = true;
-            }
-        }
-
-        /// <summary>
-        /// Makes production build and optionally runs it
+        /// Makes production build and optionally runs its output
         /// </summary>
         private void ProductionBuild(Boolean run)
         {
@@ -547,7 +535,6 @@ namespace ColtPlugin
                 client.Invoke("runProductionCompilation", new Object[] { settingObject.SecurityToken, /*run*/false });
 
                 // leverage FD launch mechanism
-                // todo: does runProductionCompilation block? no idea atm
                 if (run)
                 {
                     EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.PlayOutput", null));
@@ -555,19 +542,19 @@ namespace ColtPlugin
             }
             catch (Exception details)
             {
-                TraceManager.Add(details.ToString(), -1);
+                HandleAuthenticationExceptions(details);
             }
         }
 
 
         /// <summary>
-        /// Opens the project in COLT
+        /// Opens the project in COLT and optionally runs live session
         /// </summary>
         private void FindAndOpen(Boolean run)
         {
             // Create COLT subfolder if does not exist yet
             // While at that, start listening for colt/compile_errors.log changes
-            ConnectToCOLT(true);
+            WatchErrorsLog(true);
 
             // Find COLT project to open
             String coltFileName = GetCOLTFile();
@@ -583,7 +570,7 @@ namespace ColtPlugin
                 }
                 catch (Exception details)
                 {
-                    TraceManager.Add(details.ToString(), -1);
+                    HandleAuthenticationExceptions(details);
                 }
             }
 
@@ -594,11 +581,14 @@ namespace ColtPlugin
 
         }
 
+        /// <summary>
+        /// Exports the project to COLT and optionally runs live session
+        /// </summary>
         private void ExportAndOpen(Boolean run)
         {
             // Create COLT subfolder if does not exist yet
             // While at that, start listening for colt/compile_errors.log changes
-            ConnectToCOLT(true);
+            WatchErrorsLog(true);
 
             // Create COLT project in it
             COLTRemoteProject project = ExportCOLTProject();
@@ -608,25 +598,48 @@ namespace ColtPlugin
                 {
                     JsonRpcClient client = new JsonRpcClient();
                     client.Invoke("createProject", new Object[] { settingObject.SecurityToken, project });
+
+                    // Enable "open" button
+                    toolbarButton2.Enabled = true;
+
+                    // Remove older *.colt files
+                    foreach (String oldFile in Directory.GetFiles(Path.GetDirectoryName(project.path), "*.colt"))
+                    {
+                        if (!project.path.Contains(Path.GetFileName(oldFile)))
+                        {
+                            File.Delete(oldFile);
+                        }
+                    }
+
                     if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });
                 }
                 catch (Exception details)
                 {
-                    TraceManager.Add(details.ToString(), -1);
+                    HandleAuthenticationExceptions(details);
                 }
-
-                // Remove older *.colt files
-                foreach (String oldFile in Directory.GetFiles(Path.GetDirectoryName(project.path), "*.colt"))
-                {
-                    if (!project.path.Contains(Path.GetFileName(oldFile)))
-                    {
-                        File.Delete(oldFile);
-                    }
-                }
-
-                // Enable "open" button
-                toolbarButton2.Enabled = true;
             }
+        }
+
+        /// <summary>
+        /// Handles possible authentication exceptions
+        /// </summary>
+        private void HandleAuthenticationExceptions(Exception exception)
+        {
+            JsonRpcException rpcException = exception as JsonRpcException;
+            if (rpcException != null)
+            {
+                // if the exception comes from rpc, we have two special situations to handle:
+                // 1 short code was wrong (might happen a lot)
+                // 2 security token was wrong (should never happen)
+                // in both cases, we need to request new security token
+                if ((rpcException.TypeName == "codeOrchestra.lcs.rpc.security.InvalidShortCodeException") ||
+                    (rpcException.TypeName == "codeOrchestra.lcs.rpc.security.InvalidAuthTokenException"))
+                {
+                    settingObject.SecurityToken = null;
+                }
+            }
+
+            TraceManager.Add(exception.ToString(), -1);
         }
 
         /// <summary>
@@ -649,6 +662,10 @@ namespace ColtPlugin
             return null;
         }
 
+        /// <summary>
+        /// Exports FD project setting to COLTRemoteProject instance.
+        /// </summary>
+        /// <returns></returns>
         private COLTRemoteProject ExportCOLTProject()
         {
             // our options: parse project.ProjectPath (xml file) or use api

@@ -8,6 +8,15 @@
     using System.Web.Services.Protocols;
     using Jayrock.Json;
 
+    public class JsonRpcException : Exception
+    {
+        public String TypeName;
+        public JsonRpcException(String typeName, String message) : base((typeName == null) ? "" : ("[" + typeName + "] ") + message)
+        {
+            TypeName = typeName;
+        }
+    }
+
     /// <summary>
     /// Based on sample client from Jayrock author
     /// http://markmail.org/message/xwlaeb3nfanv2kgm
@@ -49,8 +58,7 @@
 
                 object errorObject = answer["error"];
 
-                if (errorObject != null)
-                    OnError(errorObject);
+                if (errorObject != null) OnError(errorObject);
 
                 return answer["result"];
             }
@@ -65,15 +73,14 @@
                 string message = error["message"] as string;
                 if (message == null) message = "";
 
-                string exceptionType = "";
+                string exceptionType = null;
                 JsonObject data = error["data"] as JsonObject;
                 if (data != null)
                 {
                     exceptionType = data["exceptionTypeName"] as string;
-                    if (exceptionType == null) exceptionType = ""; else exceptionType = "[" + exceptionType + "] ";
                 }
 
-                throw new Exception(exceptionType + message);
+                throw new JsonRpcException(exceptionType, message);
             }
 
             throw new Exception(errorObject as string);

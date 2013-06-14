@@ -53,7 +53,7 @@
             this.checkBox1.Location = new System.Drawing.Point(22, 148);
             this.checkBox1.Name = "checkBox1";
             this.checkBox1.Size = new System.Drawing.Size(417, 30);
-            this.checkBox1.TabIndex = 1;
+            this.checkBox1.TabIndex = 2;
             this.checkBox1.Text = "Please check this box to take advantage of COLT fast compiler when building your\r" +
                 "\nprojects (you can change this option in COLT plugin settings later).";
             this.checkBox1.UseVisualStyleBackColor = true;
@@ -63,30 +63,31 @@
             this.label1.AutoSize = true;
             this.label1.Location = new System.Drawing.Point(19, 78);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(430, 13);
+            this.label1.Size = new System.Drawing.Size(426, 13);
             this.label1.TabIndex = 2;
-            this.label1.Text = "Please copy the code from COLT and paste in the box below to connect it with the " +
-                "plugin:";
+            this.label1.Text = "Please enter authorization code from COLT in the box below to connect it with the" +
+                " plugin:";
             // 
             // textBox1
             // 
             this.textBox1.Location = new System.Drawing.Point(180, 110);
             this.textBox1.Name = "textBox1";
             this.textBox1.Size = new System.Drawing.Size(100, 20);
-            this.textBox1.TabIndex = 3;
+            this.textBox1.TabIndex = 1;
             // 
             // button1
             // 
             this.button1.Location = new System.Drawing.Point(180, 197);
             this.button1.Name = "button1";
             this.button1.Size = new System.Drawing.Size(100, 23);
-            this.button1.TabIndex = 4;
+            this.button1.TabIndex = 3;
             this.button1.Text = "OK";
             this.button1.UseVisualStyleBackColor = true;
             this.button1.Click += new System.EventHandler(this.button1_Click);
             // 
             // FirstTimeDialog
             // 
+            this.AcceptButton = this.button1;
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(468, 251);
