@@ -33,6 +33,7 @@
             this.label1 = new System.Windows.Forms.Label();
             this.textBox1 = new System.Windows.Forms.TextBox();
             this.button1 = new System.Windows.Forms.Button();
+            this.checkBox2 = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.SuspendLayout();
             // 
@@ -52,7 +53,7 @@
             this.checkBox1.CheckAlign = System.Drawing.ContentAlignment.TopLeft;
             this.checkBox1.Location = new System.Drawing.Point(22, 148);
             this.checkBox1.Name = "checkBox1";
-            this.checkBox1.Size = new System.Drawing.Size(417, 30);
+            this.checkBox1.Size = new System.Drawing.Size(416, 30);
             this.checkBox1.TabIndex = 2;
             this.checkBox1.Text = "Please check this box to take advantage of COLT fast compiler when building your\r" +
                 "\nprojects (you can change this option in COLT plugin settings later).";
@@ -77,21 +78,36 @@
             // 
             // button1
             // 
-            this.button1.Location = new System.Drawing.Point(180, 197);
+            this.button1.Location = new System.Drawing.Point(180, 230);
             this.button1.Name = "button1";
             this.button1.Size = new System.Drawing.Size(100, 23);
-            this.button1.TabIndex = 3;
+            this.button1.TabIndex = 4;
             this.button1.Text = "OK";
             this.button1.UseVisualStyleBackColor = true;
             this.button1.Click += new System.EventHandler(this.button1_Click);
+            // 
+            // checkBox2
+            // 
+            this.checkBox2.AutoSize = true;
+            this.checkBox2.CheckAlign = System.Drawing.ContentAlignment.TopLeft;
+            this.checkBox2.Checked = true;
+            this.checkBox2.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBox2.Location = new System.Drawing.Point(22, 185);
+            this.checkBox2.Name = "checkBox2";
+            this.checkBox2.Size = new System.Drawing.Size(427, 30);
+            this.checkBox2.TabIndex = 3;
+            this.checkBox2.Text = "Please check this box to start livecoding session automatically after the project" +
+                " opens\r\nin COLT (you can change this option in COLT plugin settings later).";
+            this.checkBox2.UseVisualStyleBackColor = true;
             // 
             // FirstTimeDialog
             // 
             this.AcceptButton = this.button1;
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(468, 251);
+            this.ClientSize = new System.Drawing.Size(468, 273);
             this.ControlBox = false;
+            this.Controls.Add(this.checkBox2);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.textBox1);
             this.Controls.Add(this.label1);
@@ -115,5 +131,6 @@
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.TextBox textBox1;
         private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.CheckBox checkBox2;
     }
 }

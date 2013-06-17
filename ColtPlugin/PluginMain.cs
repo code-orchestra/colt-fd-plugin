@@ -501,10 +501,11 @@ namespace ColtPlugin
                 client.Invoke("requestShortCode", new Object[] { LocaleHelper.GetString("Info.Description").TrimEnd(new Char[] { '.' }) });
 
                 // if still here, user needs to enter the code
-                Forms.FirstTimeDialog dialog = new Forms.FirstTimeDialog(settingObject.InterceptBuilds);
+                Forms.FirstTimeDialog dialog = new Forms.FirstTimeDialog(settingObject.InterceptBuilds, settingObject.AutoRun);
                 dialog.ShowDialog();
 
-                // regardless of the code, set InterceptBuilds option
+                // regardless of the code, set boolean options
+                settingObject.AutoRun = dialog.AutoRun;
                 settingObject.InterceptBuilds = dialog.InterceptBuilds;
 
                 if ((dialog.ShortCode != null) && (dialog.ShortCode.Length == 4))
@@ -775,7 +776,7 @@ namespace ColtPlugin
                 additionalOptions += option + " ";
             }
 
-            result.compilerOptions = additionalOptions.Trim();
+            result.compilerOptions = additionalOptions.Trim() + (project.TraceEnabled ? " -debug" : "");
 
             return result;
         }

@@ -10,6 +10,7 @@ namespace ColtPlugin.Forms
 {
     public partial class FirstTimeDialog : Form
     {
+        public Boolean AutoRun = true;
         public Boolean InterceptBuilds = false;
         public String ShortCode = null;
 
@@ -18,14 +19,16 @@ namespace ColtPlugin.Forms
             InitializeComponent();
         }
 
-        public FirstTimeDialog(Boolean interceptBuilds)
+        public FirstTimeDialog(Boolean interceptBuilds, Boolean autorun)
         {
             InitializeComponent();
             InterceptBuilds = checkBox1.Checked = interceptBuilds;
+            AutoRun = checkBox2.Checked = autorun;
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
+            AutoRun = checkBox2.Checked;
             InterceptBuilds = checkBox1.Checked;
             ShortCode = textBox1.Text;
 

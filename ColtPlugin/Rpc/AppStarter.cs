@@ -3,7 +3,6 @@
     using System;
     using System.Diagnostics;
     using System.IO;
-    using System.Net;
     using System.Timers;
 
     public delegate void AppStarterDelegate(Boolean param);
