@@ -73,18 +73,36 @@
   </Target>
   -->
   <ItemGroup>
+    <Reference Include="Jayrock.Json">
+      <HintPath>jayrock\Jayrock.Json.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
     <Reference Include="System.DirectoryServices" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Web.Services" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.XML" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Forms\FirstTimeDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\FirstTimeDialog.Designer.cs">
+      <DependentUpon>FirstTimeDialog.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="Rpc\AppStarter.cs" />
+    <Compile Include="COLTRemoteProject.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="PluginMain.cs" />
     <Compile Include="Resources\LocaleHelper.cs" />
+    <Compile Include="Rpc\JsonRpcClient.cs" />
     <Compile Include="Settings.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -99,6 +117,13 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Forms\FirstTimeDialog.resx">
+      <DependentUpon>FirstTimeDialog.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources\en_US.resX">
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -145,5 +170,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\colt_run.png" />
     <EmbeddedResource Include="Resources\colt_save.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\colt_banner.png" />
   </ItemGroup>
 </Project>
