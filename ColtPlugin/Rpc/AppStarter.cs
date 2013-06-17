@@ -87,24 +87,15 @@
 
         private Boolean COLTIsRunning ()
         {
-            WebClient client = new WebClient();
             try
             {
-                // this must always throw
-                client.DownloadString("http://127.0.0.1:8091/rpc/coltService");
+                JsonRpcClient client = new JsonRpcClient();
+                client.Invoke("ping", new Object[] { });
+                return true;
             }
 
-            catch (WebException e)
+            catch (Exception)
             {
-                if (e.Status == WebExceptionStatus.ProtocolError)
-                {
-                    if (((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.InternalServerError)
-                    {
-                        // until rpc is ready, this should be 404, not 500
-                        // todo: still does not work - colt crashes :S
-                        return true;
-                    }
-                }
             }
 
             return false;
