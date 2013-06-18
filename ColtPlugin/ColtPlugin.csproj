@@ -54,7 +54,7 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
-    <OutputPath>..\..\..\FlashDevelop\Bin\Debug\Plugins\</OutputPath>
+    <OutputPath>..\..\FD4\FlashDevelop\Bin\Debug\Plugins\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
   </PropertyGroup>
@@ -106,14 +106,14 @@
     <Compile Include="Settings.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\PluginCore\PluginCore.csproj">
+    <ProjectReference Include="..\..\FD4\External\Plugins\ProjectManager\ProjectManager.csproj">
+      <Project>{78101C01-E186-4954-B1DD-DEBB7905FAD8}</Project>
+      <Name>ProjectManager</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\FD4\PluginCore\PluginCore.csproj">
       <Project>{61885F70-B4DC-4B44-852D-5D6D03F2A734}</Project>
       <Name>PluginCore</Name>
       <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\ProjectManager\ProjectManager.csproj">
-      <Project>{E57AC379-B0A0-4D6F-BFB2-88639B280205}</Project>
-      <Name>ProjectManager</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
@@ -154,7 +154,7 @@
     <EmbeddedResource Include="Resources\colt.png" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\ASCompletion\ASCompletion.csproj">
+    <ProjectReference Include="..\..\FD4\External\Plugins\ASCompletion\ASCompletion.csproj">
       <Project>{4EBF2653-9654-4E40-880E-0046B3D6210E}</Project>
       <Name>ASCompletion</Name>
     </ProjectReference>

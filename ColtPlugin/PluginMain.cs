@@ -152,7 +152,7 @@ namespace ColtPlugin
                     else if ((cmd == "ProjectManager.BuildingProject") || (cmd == "ProjectManager.TestingProject"))
                     {
                         // todo: FD might send this for projects other than PluginBase.CurrentProject - figure out how to catch that
-                        if (settingObject.InterceptBuilds && allowBuildInterception)
+                        if (settingObject.InterceptBuilds && allowBuildInterception && toolbarButton2.Enabled)
                         {
                             new AppStarter(ProductionBuild, cmd == "ProjectManager.TestingProject");
 
@@ -528,7 +528,7 @@ namespace ColtPlugin
         {
             // make sure the COLT project is open
             // todo: currently no way to know if this fails, check the state before running the build in the future
-            if (toolbarButton2.Enabled) FindAndOpen(false); else ExportAndOpen(false);
+            FindAndOpen(false);
 
             try
             {
