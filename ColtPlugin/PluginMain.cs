@@ -899,7 +899,29 @@ namespace ColtPlugin
                 additionalOptions += option + " ";
             }
 
-            result.compilerOptions = additionalOptions.Trim() + (project.TraceEnabled ? " -debug" : "");
+
+            // compiler constants
+            // see AddCompilerConstants in FDBuild's Building.AS3.FlexConfigWriter
+            Boolean debugMode = project.TraceEnabled;
+            Boolean isMobile = (project.MovieOptions.Platform == AS3MovieOptions.AIR_MOBILE_PLATFORM);
+            Boolean isDesktop = (project.MovieOptions.Platform == AS3MovieOptions.AIR_PLATFORM);
+
+            additionalOptions += "-define+=CONFIG::debug," + (debugMode ? "true" : "false") + " ";
+            additionalOptions += "-define+=CONFIG::release," + (debugMode ? "false" : "true") + " ";
+            additionalOptions += "-define+=CONFIG::timeStamp,'" + DateTime.Now.ToString("d") + "' ";
+            additionalOptions += "-define+=CONFIG::air," + (isMobile || isDesktop ? "true" : "false") + " ";
+            additionalOptions += "-define+=CONFIG::mobile," + (isMobile ? "true" : "false") + " ";
+            additionalOptions += "-define+=CONFIG::desktop," + (isDesktop ? "true" : "false") + " ";
+
+            if (project.CompilerOptions.CompilerConstants != null)
+            {
+                foreach (string define in project.CompilerOptions.CompilerConstants)
+                {
+                    if (define.IndexOf(',') >= 0) additionalOptions += "-define+=" + define + " ";
+                }
+            }
+
+            result.compilerOptions = additionalOptions.Trim() + (debugMode ? " -debug" : "");
 
             return result;
         }
