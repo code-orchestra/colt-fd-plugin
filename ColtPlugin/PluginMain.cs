@@ -3,6 +3,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Reflection;
 using WeifenLuo.WinFormsUI.Docking;
@@ -13,6 +14,8 @@ using PluginCore.Utilities;
 using PluginCore.Managers;
 using PluginCore.Helpers;
 using PluginCore;
+using ProjectManager.Controls;
+using ProjectManager.Controls.TreeView;
 using ProjectManager.Projects.AS3;
 using ASCompletion.Context;
 using System.Text.RegularExpressions;
@@ -29,13 +32,15 @@ namespace ColtPlugin
         private String pluginAuth = "Makc"; // as if
         private String settingFilename;
         private Settings settingObject;
-        private ToolStripMenuItem menuItem;
+        private ToolStripMenuItem menuItem, assetFolderAddItem, assetFolderRemoveItem;
         private ToolStripButton toolbarButton, toolbarButton2;
         private FileSystemWatcher watcher;
         private String pathToLog;
         private System.Timers.Timer timer;
         private Keys MakeItLiveKeys = Keys.Control | Keys.Shift | Keys.L;
         private Boolean allowBuildInterception = true;
+        private int assetImageIndex = -1;
+        private TreeView projectTree;
 
 	    #region Required Properties
 
@@ -126,6 +131,10 @@ namespace ColtPlugin
 		{
             switch (e.Type)
             {
+                case EventType.UIStarted:
+                    DirectoryNode.OnDirectoryNodeRefresh += new DirectoryNodeRefresh(CreateAssetFoldersIcons);
+                    break;
+
                 case EventType.Command:
                     string cmd = (e as DataEvent).Action;
                     if (cmd == "ProjectManager.Project")
@@ -146,8 +155,8 @@ namespace ColtPlugin
                     else if (cmd == "ProjectManager.ToolBar")
                     {
                         Object toolStrip = (e as DataEvent).Data;
-                        toolbarButton = CreateToolbarButton(toolStrip as ToolStrip, "colt_save.png", "Menu.ExportToCOLT", new EventHandler(OnClick));
-                        toolbarButton2 = CreateToolbarButton(toolStrip as ToolStrip, "colt_run.png", "Menu.OpenInCOLT", new EventHandler(OnClick2));
+                        toolbarButton = CreateToolbarButton(toolStrip as ToolStrip, "colt_save.png", "Menu.ExportToCOLT", OnClick);
+                        toolbarButton2 = CreateToolbarButton(toolStrip as ToolStrip, "colt_run.png", "Menu.OpenInCOLT", OnClick2);
                     }
                     else if ((cmd == "ProjectManager.BuildingProject") || (cmd == "ProjectManager.TestingProject"))
                     {
@@ -158,6 +167,10 @@ namespace ColtPlugin
 
                             e.Handled = true;
                         }
+                    }
+                    else if (cmd == "ProjectManager.TreeSelectionChanged")
+                    {
+                        CreateContextMenuItems();
                     }
                     break;
                 
@@ -226,22 +239,108 @@ namespace ColtPlugin
         /// </summary> 
         public void AddEventHandlers()
         {
+            EventManager.AddEventHandler(this, EventType.UIStarted, HandlingPriority.High);
             EventManager.AddEventHandler(this, EventType.Command | EventType.FileSave | EventType.Keys | EventType.Shortcut);
 
             watcher = new FileSystemWatcher();
             watcher.NotifyFilter = NotifyFilters.LastWrite;
-            watcher.Changed += new FileSystemEventHandler(OnFileChange);
+            watcher.Changed += OnFileChange;
 
             PluginBase.MainForm.RegisterShortcutItem("ColtPlugin.MakeItLive", MakeItLiveKeys);
         }
 
         #endregion
 
+        #region GetImage() stuff
+
+        private static Dictionary<String, Bitmap> imageCache = new Dictionary<string, Bitmap>();
+
+        /// <summary>
+        /// Gets embedded image from resources
+        /// </summary>
+        private static Image GetImage(String imageName)
+        {
+            if (!imageCache.ContainsKey(imageName))
+            {
+                Assembly assembly = Assembly.GetExecutingAssembly();
+                imageCache.Add(imageName, new Bitmap(assembly.GetManifestResourceStream("ColtPlugin.Resources." + imageName)));
+            }
+
+            return imageCache[imageName];
+        }
+
+        #endregion
+
         #region Menu items stuff
+
+        private void CreateAssetFoldersIcons(DirectoryNode node)
+        {
+            // we are going to save TreeView reference once we saw it
+            // this hack comes from SourceControl's OverlayManager :S
+            projectTree = node.TreeView;
+
+            ImageList list = projectTree.ImageList;
+            if (assetImageIndex < 0)
+            {
+                assetImageIndex = list.Images.Count;
+                //list.Images.Add(GetImage("colt_assets_folder.png"));
+                list.Images.Add(PluginBase.MainForm.FindImage("520"));
+            }
+
+            if (IsAssetFolder(node.BackingPath))
+            {
+                node.ImageIndex = assetImageIndex;
+                node.SelectedImageIndex = assetImageIndex;
+            }
+        }
+
+        private void CreateContextMenuItems()
+        {
+            if (assetFolderAddItem == null)
+            {
+                //assetFolderAddItem = new ToolStripMenuItem(LocaleHelper.GetString("ContextMenu.AssetFolderAdd"), GetImage("colt_assets.png"));
+                assetFolderAddItem = new ToolStripMenuItem(LocaleHelper.GetString("ContextMenu.AssetFolderAdd"), PluginBase.MainForm.FindImage("336"));
+                assetFolderAddItem.Click += OnAssetAddOrRemoveClick;
+
+                assetFolderRemoveItem = new ToolStripMenuItem(LocaleHelper.GetString("ContextMenu.AssetFolderRemove"));
+                assetFolderRemoveItem.Checked = true;
+                assetFolderRemoveItem.Click += OnAssetAddOrRemoveClick;
+            }
+
+            if ((projectTree != null) && !(projectTree.SelectedNode is ProjectNode))
+            {
+                DirectoryNode node = projectTree.SelectedNode as DirectoryNode;
+                if (node != null)
+                {
+                    // good to go - insert after 1st separator
+                    ContextMenuStrip menu = projectTree.ContextMenuStrip;
+
+                    Int32 index = 0;
+                    while (index < menu.Items.Count)
+                    {
+                        index++; if (menu.Items[index - 1] is ToolStripSeparator) break;
+                    }
+
+                    menu.Items.Insert(index, IsAssetFolder(node.BackingPath) ? assetFolderRemoveItem : assetFolderAddItem);
+                }
+            }
+        }
+
+        private void OnAssetAddOrRemoveClick(Object sender, EventArgs e)
+        {
+            DirectoryNode node = projectTree.SelectedNode as DirectoryNode;
+            if (node != null)
+            {
+                List<String> assets = new List<String>(AssetFolders);
+                if (assets.Contains(node.BackingPath)) assets.Remove(node.BackingPath); else assets.Add(node.BackingPath);
+                AssetFolders = assets.ToArray();
+                node.Refresh(false);
+            }
+        }
 
         private void CreateMenuItem(ToolStripMenuItem projectMenu)
         {
-            menuItem = new ToolStripMenuItem(LocaleHelper.GetString("Menu.ExportToCOLT"), GetImage("colt_save.png"), new EventHandler(OnClick), null);
+            menuItem = new ToolStripMenuItem(LocaleHelper.GetString("Menu.ExportToCOLT"), GetImage("colt_save.png"), OnClick, null);
             menuItem.Enabled = false;
             projectMenu.DropDownItems.Add(menuItem);
         }
@@ -257,17 +356,7 @@ namespace ColtPlugin
             return button;
         }
 
-        /// <summary>
-        /// Gets embedded image from resources
-        /// </summary>
-        private static Image GetImage(String imageName)
-        {
-            imageName = "ColtPlugin.Resources." + imageName;
-            Assembly assembly = Assembly.GetExecutingAssembly();
-            return new Bitmap(assembly.GetManifestResourceStream(imageName));
-        }
-
-        private void OnClick(Object sender, System.EventArgs e)
+        private void OnClick(Object sender, EventArgs e)
         {
             if (settingObject.SecurityToken != null)
             {
@@ -280,7 +369,7 @@ namespace ColtPlugin
             }
         }
 
-        private void OnClick2(Object sender, System.EventArgs e)
+        private void OnClick2(Object sender, EventArgs e)
         {
             if (settingObject.SecurityToken != null)
             {
@@ -321,6 +410,38 @@ namespace ColtPlugin
             ObjectSerializer.Serialize(settingFilename, settingObject);
         }
 
+        /// <summary>
+        /// Convenience property to get or set asset folders todo: extract this into something nice
+        /// </summary>
+        private String[] AssetFolders
+        {
+            get
+            {
+                AS3Project project = (AS3Project)PluginBase.CurrentProject;
+
+                if ((project != null) && project.Storage.ContainsKey("colt.assets"))
+                {
+                    return project.Storage["colt.assets"].Split('|');
+                }
+
+                return new String[] { };
+            }
+
+            set
+            {
+                AS3Project project = (AS3Project)PluginBase.CurrentProject;
+
+                project.Storage["colt.assets"] = String.Join("|", value);
+
+                project.Save();
+            }
+        }
+
+        private Boolean IsAssetFolder(String path)
+        {
+            return (Array.IndexOf<String>(AssetFolders, path) >= 0);
+        }
+
 		#endregion
 
         #region Logging errors
@@ -336,6 +457,7 @@ namespace ColtPlugin
 
             // create the folder and subscribe to errors log updates
             IProject project = PluginBase.CurrentProject;
+            if (project == null) return;
 
             String coltFolderPath = project.GetAbsolutePath(settingObject.WorkingFolder);
             if (createFolder && !Directory.Exists(coltFolderPath)) Directory.CreateDirectory(coltFolderPath);
@@ -745,6 +867,7 @@ namespace ColtPlugin
             for (int i=0; i<sourcePaths.Length; i++) sourcePaths[i] = project.GetAbsolutePath(sourcePaths[i]);
             result.sources = sourcePaths;
 
+            result.assets = AssetFolders;
 
             // size, frame rate and background color
             String[] coltAdditionalOptionsKeys = {
