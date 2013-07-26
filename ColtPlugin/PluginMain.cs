@@ -835,9 +835,21 @@ namespace ColtPlugin
 
             result.name = project.Name;
 
-            String[] libraryPaths = project.CompilerOptions.LibraryPaths.Clone() as String[];
-            for (int i=0; i<libraryPaths.Length; i++) libraryPaths[i] = project.GetAbsolutePath(libraryPaths[i]);
-            result.libraries = libraryPaths;
+            List<String> libraryPathsList = new List<String>(project.CompilerOptions.LibraryPaths);
+            for (int i=0; i<libraryPathsList.Count; i++)
+            {
+                if (libraryPathsList[i].ToLower().EndsWith(".swc"))
+                {
+                    libraryPathsList[i] = project.GetAbsolutePath(libraryPathsList[i]);
+                }
+
+                else
+                {
+                    // workaround (FD saves empty paths for missing libs)
+                    libraryPathsList.RemoveAt(i); i--;
+                }
+            }
+            result.libraries = libraryPathsList.ToArray();
 
             result.targetPlayerVersion = project.MovieOptions.Version + ".0";
 
@@ -908,7 +920,7 @@ namespace ColtPlugin
 
             additionalOptions += "-define+=CONFIG::debug," + (debugMode ? "true" : "false") + " ";
             additionalOptions += "-define+=CONFIG::release," + (debugMode ? "false" : "true") + " ";
-            additionalOptions += "-define+=CONFIG::timeStamp,'" + DateTime.Now.ToString("d") + "' ";
+            additionalOptions += "-define+=CONFIG::timeStamp,\"'" + DateTime.Now.ToString("d") + "'\" ";
             additionalOptions += "-define+=CONFIG::air," + (isMobile || isDesktop ? "true" : "false") + " ";
             additionalOptions += "-define+=CONFIG::mobile," + (isMobile ? "true" : "false") + " ";
             additionalOptions += "-define+=CONFIG::desktop," + (isDesktop ? "true" : "false") + " ";
