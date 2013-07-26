@@ -417,7 +417,7 @@ namespace ColtPlugin
         {
             get
             {
-                AS3Project project = (AS3Project)PluginBase.CurrentProject;
+                AS3Project project = PluginBase.CurrentProject as AS3Project;
 
                 if ((project != null) && project.Storage.ContainsKey("colt.assets"))
                 {
@@ -429,11 +429,14 @@ namespace ColtPlugin
 
             set
             {
-                AS3Project project = (AS3Project)PluginBase.CurrentProject;
+                AS3Project project = PluginBase.CurrentProject as AS3Project;
 
-                project.Storage["colt.assets"] = String.Join("|", value);
+                if (project != null)
+                {
+                    project.Storage["colt.assets"] = String.Join("|", value);
 
-                project.Save();
+                    project.Save();
+                }
             }
         }
 
