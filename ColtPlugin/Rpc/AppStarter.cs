@@ -88,7 +88,7 @@
         {
             try
             {
-                JsonRpcClient client = new JsonRpcClient();
+                JsonRpcClient client = new JsonRpcClient("FIXME");
                 client.Invoke("ping", new Object[] { });
                 return true;
             }

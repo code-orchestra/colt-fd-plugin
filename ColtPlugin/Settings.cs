@@ -11,10 +11,22 @@ namespace ColtPlugin
     {
         public String SecurityToken;
 
+        private String coltExe = null;
         private String workingFolder = "colt";
         private Boolean autorun = true;
         private Boolean fullConfig = false;
         private Boolean interceptBuilds = false;
+
+        /// <summary> 
+        /// Get and sets colt.exe path
+        /// </summary>
+        [DisplayName("Path to COLT")]
+        [Description("Path to COLT executable.")]
+        public String Executable
+        {
+            get { return this.coltExe; }
+            set { this.coltExe = value; }
+        }
         
         /// <summary> 
         /// Get and sets colt folder

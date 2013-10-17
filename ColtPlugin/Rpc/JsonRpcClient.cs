@@ -7,6 +7,7 @@
     using System.Text;
     using System.Web.Services.Protocols;
     using Jayrock.Json;
+    using System.Xml;
 
     public class JsonRpcException : Exception
     {
@@ -26,9 +27,25 @@
     {
         private int _id;
 
-        public JsonRpcClient()
+        public JsonRpcClient(string projectPath)
             : base()
         {
+            string coltFolder = System.Environment.GetEnvironmentVariable("USERPROFILE") + @"\.colt\";
+
+            XmlDocument storageDescriptor = new XmlDocument();
+            storageDescriptor.Load(coltFolder + "storage.xml");
+
+            // <xml>
+            //  <storage path='/Users/makc/Desktop/Site/site.colt' subDir='8572a4d3' />
+            XmlNodeList storageList = storageDescriptor.SelectNodes("/xml/storage[@path='" + projectPath + "']");
+            if (storageList.Count == 1)
+            {
+                string storage = storageList[0].Attributes["subDir"].Value;
+                int port = int.Parse ( File.ReadAllText(coltFolder + @"storage\" + storage + @"\rpc.info").Split(':')[1] );
+
+                Url = "http://127.0.0.1:" + port + "/rpc/coltService"; return;
+            }
+
             Url = "http://127.0.0.1:8092/rpc/coltService";
         }
 

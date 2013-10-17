@@ -20,6 +20,7 @@ using ProjectManager.Projects.AS3;
 using ASCompletion.Context;
 using System.Text.RegularExpressions;
 using ASCompletion.Model;
+using System.Xml;
 
 namespace ColtPlugin
 {
@@ -358,7 +359,8 @@ namespace ColtPlugin
 
         private void OnClick(Object sender, EventArgs e)
         {
-            if (settingObject.SecurityToken != null)
+            ExportAndOpen(settingObject.AutoRun);//FIXME
+/*            if (settingObject.SecurityToken != null)
             {
                 new AppStarter(ExportAndOpen, settingObject.AutoRun);
             }
@@ -366,12 +368,13 @@ namespace ColtPlugin
             else
             {
                 new AppStarter(GetSecurityToken, true);
-            }
+            }*/
         }
 
         private void OnClick2(Object sender, EventArgs e)
         {
-            if (settingObject.SecurityToken != null)
+            FindAndOpen(settingObject.AutoRun);//FIXME
+/*            if (settingObject.SecurityToken != null)
             {
                 new AppStarter(FindAndOpen, settingObject.AutoRun);
             }
@@ -379,7 +382,7 @@ namespace ColtPlugin
             else
             {
                 new AppStarter(GetSecurityToken, true);
-            }
+            }*/
         }
 
         #endregion
@@ -391,14 +394,27 @@ namespace ColtPlugin
         /// </summary>
         public void LoadSettings()
         {
+            string defaultExe = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + @"\COLT\colt.exe";
+
             settingObject = new Settings();
-            if (!File.Exists(settingFilename)) SaveSettings();
+
+            if (!File.Exists(settingFilename))
+            {
+                settingObject.Executable = defaultExe;
+                SaveSettings();
+            }
             else
             {
                 Object obj = ObjectSerializer.Deserialize(settingFilename, settingObject);
                 settingObject = (Settings)obj;
 // debug
 //settingObject.SecurityToken = null;
+                string exe = settingObject.Executable;
+                if ((exe == null) || (exe.Length == 0))
+                {
+                    settingObject.Executable = defaultExe;
+                    SaveSettings();
+                }
             }
         }
 
@@ -618,7 +634,7 @@ namespace ColtPlugin
 
         private void GetSecurityToken(Boolean param)
         {
-            JsonRpcClient client = new JsonRpcClient();
+            JsonRpcClient client = new JsonRpcClient("FIXME");
 
             try
             {
@@ -657,7 +673,7 @@ namespace ColtPlugin
 
             try
             {
-                JsonRpcClient client = new JsonRpcClient();
+                JsonRpcClient client = new JsonRpcClient("FIXME");
                 client.Invoke("runProductionCompilation", new Object[] { settingObject.SecurityToken, /*run*/false });
 
                 // leverage FD launch mechanism
@@ -670,6 +686,22 @@ namespace ColtPlugin
             {
                 HandleAuthenticationExceptions(details);
             }
+        }
+
+        private void OpenInCOLT(string pathToProject)
+        {
+            // put it on recent files list
+            string coltFolder = System.Environment.GetEnvironmentVariable("USERPROFILE") + @"\.colt\";
+
+            XmlDocument workingSet = new XmlDocument();
+            workingSet.Load(coltFolder + "workingset.xml");
+            XmlElement root = (XmlElement)workingSet.SelectSingleNode("/workingset");
+            XmlElement project = (XmlElement)root.PrependChild(workingSet.CreateElement("", "project", ""));
+            project.Attributes.Append(workingSet.CreateAttribute("path")).Value = pathToProject;
+            workingSet.Save(coltFolder + "workingset.xml");
+
+            // open COLT exe
+            Process.Start(settingObject.Executable);
         }
 
 
@@ -685,14 +717,17 @@ namespace ColtPlugin
             // Find COLT project to open
             String coltFileName = GetCOLTFile();
 
-            // Open it with default app (COLT)
+            // Open it
             if (coltFileName != null)
             {
                 try
                 {
-                    JsonRpcClient client = new JsonRpcClient();
+                    OpenInCOLT(coltFileName);
+
+                    // TODO: if (run) client.Invoke...
+/*                    JsonRpcClient client = new JsonRpcClient("FIXME");
                     client.Invoke("loadProject", new Object[] { settingObject.SecurityToken, coltFileName });
-                    if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });
+                    if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });*/
                 }
                 catch (Exception details)
                 {
@@ -722,8 +757,15 @@ namespace ColtPlugin
             {
                 try
                 {
-                    JsonRpcClient client = new JsonRpcClient();
+                    // Export the project as xml file
+                    project.Save();
+
+                    // Open it
+                    OpenInCOLT(project.path);
+
+/*                    JsonRpcClient client = new JsonRpcClient("FIXME");
                     client.Invoke("createProject", new Object[] { settingObject.SecurityToken, project });
+ */
 
                     // Enable "open" button
                     toolbarButton2.Enabled = true;
@@ -737,7 +779,8 @@ namespace ColtPlugin
                         }
                     }
 
-                    if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });
+                    //TODO this must return...
+/*                    if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });*/
                 }
                 catch (Exception details)
                 {
@@ -843,7 +886,7 @@ namespace ColtPlugin
             {
                 if (libraryPathsList[i].ToLower().EndsWith(".swc"))
                 {
-                    libraryPathsList[i] = project.GetAbsolutePath(libraryPathsList[i]);
+                    libraryPathsList[i] = @"..\" + libraryPathsList[i];
                 }
 
                 else
@@ -875,14 +918,16 @@ namespace ColtPlugin
 
             else
             {
+                result.outputPath = project.GetAbsolutePath("");
                 result.outputFileName = outputPath;
             }
 
             String[] sourcePaths = project.SourcePaths.Clone() as String[];
-            for (int i=0; i<sourcePaths.Length; i++) sourcePaths[i] = project.GetAbsolutePath(sourcePaths[i]);
+            for (int i=0; i<sourcePaths.Length; i++) sourcePaths[i] = @"..\" + sourcePaths[i];
             result.sources = sourcePaths;
 
             result.assets = AssetFolders;
+            for (int i=0; i<result.assets.Length; i++) result.assets[i] = @"..\" + project.GetRelativePath(result.assets[i]);
 
             // size, frame rate and background color
             String[] coltAdditionalOptionsKeys = {
