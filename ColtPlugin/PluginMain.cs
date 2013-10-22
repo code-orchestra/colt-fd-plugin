@@ -21,6 +21,7 @@ using ASCompletion.Context;
 using System.Text.RegularExpressions;
 using ASCompletion.Model;
 using System.Xml;
+using System.Runtime.InteropServices;
 
 namespace ColtPlugin
 {
@@ -105,12 +106,21 @@ namespace ColtPlugin
 		#endregion
 		
 		#region Required Methods
+
+//        [DllImport("kernel32.dll", SetLastError = true)]
+//        [return: MarshalAs(UnmanagedType.Bool)]
+//        static extern bool AllocConsole();
+
+//        [DllImport("kernel32.dll", SetLastError = true)]
+//        [return: MarshalAs(UnmanagedType.Bool)]
+//        static extern bool FreeConsole();
 		
 		/// <summary>
 		/// Initializes the plugin
 		/// </summary>
 		public void Initialize()
 		{
+//            AllocConsole();
             InitBasics();
             LoadSettings();
             InitLocalization();
@@ -164,7 +174,7 @@ namespace ColtPlugin
                         // todo: FD might send this for projects other than PluginBase.CurrentProject - figure out how to catch that
                         if (settingObject.InterceptBuilds && allowBuildInterception && toolbarButton2.Enabled)
                         {
-                            new AppStarter(ProductionBuild, cmd == "ProjectManager.TestingProject");
+                            ProductionBuild(cmd == "ProjectManager.TestingProject");
 
                             e.Handled = true;
                         }
@@ -359,30 +369,12 @@ namespace ColtPlugin
 
         private void OnClick(Object sender, EventArgs e)
         {
-            ExportAndOpen(settingObject.AutoRun);//FIXME
-/*            if (settingObject.SecurityToken != null)
-            {
-                new AppStarter(ExportAndOpen, settingObject.AutoRun);
-            }
-
-            else
-            {
-                new AppStarter(GetSecurityToken, true);
-            }*/
+            ExportAndOpen(settingObject.AutoRun);
         }
 
         private void OnClick2(Object sender, EventArgs e)
         {
-            FindAndOpen(settingObject.AutoRun);//FIXME
-/*            if (settingObject.SecurityToken != null)
-            {
-                new AppStarter(FindAndOpen, settingObject.AutoRun);
-            }
-
-            else
-            {
-                new AppStarter(GetSecurityToken, true);
-            }*/
+            FindAndOpen(settingObject.AutoRun);
         }
 
         #endregion
@@ -632,33 +624,39 @@ namespace ColtPlugin
 
         #endregion
 
-        private void GetSecurityToken(Boolean param)
+        private void GetSecurityToken()
         {
-            JsonRpcClient client = new JsonRpcClient("FIXME");
+            // we expect this file to be open by now
+            // because we get here from auth exception
+            String coltFileName = GetCOLTFile();
 
-            try
+            if (coltFileName != null)
             {
-                // knock
-                client.Invoke("requestShortCode", new Object[] { LocaleHelper.GetString("Info.Description").TrimEnd(new Char[] { '.' }) });
-
-                // if still here, user needs to enter the code
-                Forms.FirstTimeDialog dialog = new Forms.FirstTimeDialog(settingObject.InterceptBuilds, settingObject.AutoRun);
-                dialog.ShowDialog();
-
-                // regardless of the code, set boolean options
-                settingObject.AutoRun = dialog.AutoRun;
-                settingObject.InterceptBuilds = dialog.InterceptBuilds;
-
-                if ((dialog.ShortCode != null) && (dialog.ShortCode.Length == 4))
+                try
                 {
-                    // short code looks right - request security token
-                    settingObject.SecurityToken = client.Invoke("obtainAuthToken", new Object[] { dialog.ShortCode }).ToString();
-                }
-            }
+                    JsonRpcClient client = new JsonRpcClient(coltFileName);
+                    // knock
+                    client.Invoke("requestShortCode", new Object[] { "FlashDevelop" /*LocaleHelper.GetString("Info.Description").TrimEnd(new Char[] { '.' })*/ });
 
-            catch (Exception details)
-            {
-                HandleAuthenticationExceptions(details);
+                    // if still here, user needs to enter the code
+                    Forms.FirstTimeDialog dialog = new Forms.FirstTimeDialog(settingObject.InterceptBuilds, settingObject.AutoRun);
+                    dialog.ShowDialog();
+
+                    // regardless of the code, set boolean options
+                    settingObject.AutoRun = dialog.AutoRun;
+                    settingObject.InterceptBuilds = dialog.InterceptBuilds;
+
+                    if ((dialog.ShortCode != null) && (dialog.ShortCode.Length == 4))
+                    {
+                        // short code looks right - request security token
+                        settingObject.SecurityToken = client.Invoke("obtainAuthToken", new Object[] { dialog.ShortCode }).ToString();
+                    }
+                }
+
+                catch (Exception details)
+                {
+                    HandleAuthenticationExceptions(details);
+                }
             }
         }
 
@@ -668,47 +666,49 @@ namespace ColtPlugin
         private void ProductionBuild(Boolean run)
         {
             // make sure the COLT project is open
-            // todo: currently no way to know if this fails, check the state before running the build in the future
-            FindAndOpen(false);
+            String path = FindAndOpen(false);
 
-            try
+            if (path != null)
             {
-                JsonRpcClient client = new JsonRpcClient("FIXME");
-                client.Invoke("runProductionCompilation", new Object[] { settingObject.SecurityToken, /*run*/false });
-
-                // leverage FD launch mechanism
-                if (run)
+                try
                 {
-                    EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.PlayOutput", null));
+                    JsonRpcClient client = new JsonRpcClient(path);
+                    client.PingOrRunCOLT(settingObject.Executable);
+
+                    // leverage FD launch mechanism
+                    if (run)
+                    {
+                        client.InvokeAsync("runProductionCompilation", RunAfterProductionBuild, new Object[] { settingObject.SecurityToken, /*run*/false });
+                    }
+                    else
+                    {
+                        client.InvokeAsync("runProductionCompilation", HandleAuthenticationExceptions, new Object[] { settingObject.SecurityToken, /*run*/false });
+                    }
+                }
+                catch (Exception details)
+                {
+                    HandleAuthenticationExceptions(details);
                 }
             }
-            catch (Exception details)
+        }
+
+        private void RunAfterProductionBuild(Object result)
+        {
+            Exception exception = result as Exception;
+            if (exception != null)
             {
-                HandleAuthenticationExceptions(details);
+                HandleAuthenticationExceptions(exception);
+            }
+            else
+            {
+                EventManager.DispatchEvent(this, new DataEvent(EventType.Command, "ProjectManager.PlayOutput", null));
             }
         }
-
-        private void OpenInCOLT(string pathToProject)
-        {
-            // put it on recent files list
-            string coltFolder = System.Environment.GetEnvironmentVariable("USERPROFILE") + @"\.colt\";
-
-            XmlDocument workingSet = new XmlDocument();
-            workingSet.Load(coltFolder + "workingset.xml");
-            XmlElement root = (XmlElement)workingSet.SelectSingleNode("/workingset");
-            XmlElement project = (XmlElement)root.PrependChild(workingSet.CreateElement("", "project", ""));
-            project.Attributes.Append(workingSet.CreateAttribute("path")).Value = pathToProject;
-            workingSet.Save(coltFolder + "workingset.xml");
-
-            // open COLT exe
-            Process.Start(settingObject.Executable);
-        }
-
 
         /// <summary>
         /// Opens the project in COLT and optionally runs live session
         /// </summary>
-        private void FindAndOpen(Boolean run)
+        private String FindAndOpen(Boolean run)
         {
             // Create COLT subfolder if does not exist yet
             // While at that, start listening for colt/compile_errors.log changes
@@ -722,22 +722,26 @@ namespace ColtPlugin
             {
                 try
                 {
-                    OpenInCOLT(coltFileName);
+                    if (run)
+                    {
+                        JsonRpcClient client = new JsonRpcClient(coltFileName);
+                        client.PingOrRunCOLT(settingObject.Executable);
+                        client.InvokeAsync("runBaseCompilation", HandleAuthenticationExceptions, new Object[] { settingObject.SecurityToken });
+                    }
 
-                    // TODO: if (run) client.Invoke...
-/*                    JsonRpcClient client = new JsonRpcClient("FIXME");
-                    client.Invoke("loadProject", new Object[] { settingObject.SecurityToken, coltFileName });
-                    if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });*/
+                    return coltFileName;
                 }
                 catch (Exception details)
                 {
                     HandleAuthenticationExceptions(details);
+                    return null;
                 }
             }
 
             else
             {
                 toolbarButton2.Enabled = false;
+                return null;
             }
 
         }
@@ -760,12 +764,13 @@ namespace ColtPlugin
                     // Export the project as xml file
                     project.Save();
 
-                    // Open it
-                    OpenInCOLT(project.path);
-
-/*                    JsonRpcClient client = new JsonRpcClient("FIXME");
-                    client.Invoke("createProject", new Object[] { settingObject.SecurityToken, project });
- */
+                    // Optionally run base compilation
+                    if (run)
+                    {
+                        JsonRpcClient client = new JsonRpcClient(project.path);
+                        client.PingOrRunCOLT(settingObject.Executable);
+                        client.InvokeAsync("runBaseCompilation", HandleAuthenticationExceptions, new Object[] { settingObject.SecurityToken });
+                    }
 
                     // Enable "open" button
                     toolbarButton2.Enabled = true;
@@ -778,9 +783,6 @@ namespace ColtPlugin
                             File.Delete(oldFile);
                         }
                     }
-
-                    //TODO this must return...
-/*                    if (run) client.Invoke("runBaseCompilation", new Object[] { settingObject.SecurityToken });*/
                 }
                 catch (Exception details)
                 {
@@ -792,23 +794,33 @@ namespace ColtPlugin
         /// <summary>
         /// Handles possible authentication exceptions
         /// </summary>
-        private void HandleAuthenticationExceptions(Exception exception)
+        private void HandleAuthenticationExceptions(object param)
         {
-            JsonRpcException rpcException = exception as JsonRpcException;
-            if (rpcException != null)
+            Exception exception = param as Exception;
+            if (exception != null)
             {
-                // if the exception comes from rpc, we have two special situations to handle:
-                // 1 short code was wrong (might happen a lot)
-                // 2 security token was wrong (should never happen)
-                // in both cases, we need to request new security token
-                if ((rpcException.TypeName == "codeOrchestra.lcs.rpc.security.InvalidShortCodeException") ||
-                    (rpcException.TypeName == "codeOrchestra.lcs.rpc.security.InvalidAuthTokenException"))
+                JsonRpcException rpcException = exception as JsonRpcException;
+                if (rpcException != null)
                 {
-                    settingObject.SecurityToken = null;
+                    // if the exception comes from rpc, we have two special situations to handle:
+                    // 1 short code was wrong (might happen a lot)
+                    // 2 security token was wrong (should never happen)
+                    // in both cases, we need to request new security token
+                    if ((rpcException.TypeName == "codeOrchestra.colt.core.rpc.security.InvalidShortCodeException") ||
+                        (rpcException.TypeName == "codeOrchestra.colt.core.rpc.security.InvalidAuthTokenException"))
+                    {
+                        settingObject.SecurityToken = null;
+                        
+                        // request new security token immediately
+                        GetSecurityToken();
+                    }
+                }
+
+                else
+                {
+                    TraceManager.Add(exception.ToString(), -1);
                 }
             }
-
-            TraceManager.Add(exception.ToString(), -1);
         }
 
         /// <summary>

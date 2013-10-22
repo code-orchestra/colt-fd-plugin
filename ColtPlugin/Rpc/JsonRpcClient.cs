@@ -8,6 +8,8 @@
     using System.Web.Services.Protocols;
     using Jayrock.Json;
     using System.Xml;
+    using System.Timers;
+    using System.Diagnostics;
 
     public class JsonRpcException : Exception
     {
@@ -26,10 +28,13 @@
     public class JsonRpcClient : HttpWebClientProtocol
     {
         private int _id;
+        private string _projectPath;
 
         public JsonRpcClient(string projectPath)
             : base()
         {
+            _projectPath = projectPath;
+
             string coltFolder = System.Environment.GetEnvironmentVariable("USERPROFILE") + @"\.colt\";
 
             XmlDocument storageDescriptor = new XmlDocument();
@@ -37,7 +42,7 @@
 
             // <xml>
             //  <storage path='/Users/makc/Desktop/Site/site.colt' subDir='8572a4d3' />
-            XmlNodeList storageList = storageDescriptor.SelectNodes("/xml/storage[@path='" + projectPath + "']");
+            XmlNodeList storageList = storageDescriptor.SelectNodes("/xml/storage[@path='" + _projectPath + "']");
             if (storageList.Count == 1)
             {
                 string storage = storageList[0].Attributes["subDir"].Value;
@@ -49,8 +54,39 @@
             Url = "http://127.0.0.1:8092/rpc/coltService";
         }
 
+        public void PingOrRunCOLT(string executable)
+        {
+            try
+            {
+                Invoke("ping", new Object[] { });
+            }
+
+            catch (Exception)
+            {
+                // put it on recent files list
+                string coltFolder = System.Environment.GetEnvironmentVariable("USERPROFILE") + @"\.colt\";
+
+                XmlDocument workingSet = new XmlDocument();
+                workingSet.Load(coltFolder + "workingset.xml");
+                XmlElement root = (XmlElement)workingSet.SelectSingleNode("/workingset");
+                XmlElement project = (XmlElement)root.PrependChild(workingSet.CreateElement("", "project", ""));
+                project.Attributes.Append(workingSet.CreateAttribute("path")).Value = _projectPath;
+                workingSet.Save(coltFolder + "workingset.xml");
+
+                // open COLT exe
+                Process.Start(executable);
+            }
+        }
+
+        public virtual void InvokeAsync(string method, Callback callback, params object[] args)
+        {
+            JsonRpcClientAsyncHelper helper = new JsonRpcClientAsyncHelper(this, method, callback, args);
+        }
+
         public virtual object Invoke(string method, params object[] args)
         {
+            Console.WriteLine("Invoke: method = " + method);
+
             WebRequest request = GetWebRequest(new Uri(Url));
             request.Method = "POST";
 
@@ -101,6 +137,80 @@
             }
 
             throw new Exception(errorObject as string);
+        }
+    }
+
+    public delegate void Callback (object result);
+
+    class JsonRpcClientAsyncHelper
+    {
+        JsonRpcClient client;
+        string method;
+        object[] args;
+        Callback callback;
+        Timer timer;
+        int count;
+
+        public JsonRpcClientAsyncHelper(JsonRpcClient client, string method, Callback callback, params object[] args)
+        {
+            this.client = client;
+            this.method = method;
+            this.args = args;
+            this.callback = callback;
+
+            timer = new Timer();
+            timer.SynchronizingObject = (System.Windows.Forms.Form)PluginCore.PluginBase.MainForm;
+            timer.Interval = 1000;
+            timer.Elapsed += OnTimer;
+            count = 0;
+            OnTimer();
+        }
+
+        private void OnTimer(Object sender = null, EventArgs e = null)
+        {
+            timer.Stop();
+
+            Console.WriteLine("JsonRpcClientAsyncHelper's OnTimer(), method = " + method);
+
+            if (COLTIsRunning())
+            {
+                // we are good to go
+                try
+                {
+                    object result = client.Invoke(method, args);
+                    if (callback != null) callback(result);
+                }
+
+                catch (Exception error)
+                {
+                    if (callback != null) callback(error);
+                }
+
+                return;
+            }
+
+            if (count++ > 13)
+            {
+                PluginCore.Managers.TraceManager.Add(Resources.LocaleHelper.GetString("Error.StartingCOLTTimedOut"), -1);
+                return;
+            }
+
+            timer.Start();
+        }
+
+        private Boolean COLTIsRunning()
+        {
+            try
+            {
+                client.Invoke("ping", new Object[] { });
+                return true;
+            }
+
+            catch (Exception)
+            {
+            }
+
+            return false;
         }
     }
 }
